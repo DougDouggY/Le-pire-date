@@ -61,7 +61,7 @@ Ordres de grandeur pour **un salon, deux joueurs, une seule fenêtre chacun**, h
 | Inactivité/fin, 20 s | Environ 360 |
 | Deux fenêtres fermées/onglets masqués | 0 requête périodique après les appels déjà en vol |
 
-La préparation Foxy Duo du Double Date ajoute six actions ponctuelles lorsque les deux joueurs sont directement d’accord (ville, like et vote du lieu pour chacun). Les suggestions, changements de choix et votes de revanche s’ajoutent également. Contacts et les fiches statistiques ne font aucune requête dédiée : l’historique est local au navigateur et les profils visibles sont déjà dans l’état du salon.
+La préparation Foxy Duo du Double Date ajoute dix actions ponctuelles lorsque les deux joueurs sont directement d’accord (ville, like, confirmation du match, vote et confirmation du lieu pour chacun), plus la mise à jour des deux pseudos avant Prêt. Les changements de choix et votes de revanche s’ajoutent également. Blind Foxy affiche un décompte local de 45 secondes sans requête à chaque seconde ; l’expiration est traitée une seule fois par le serveur lors d’un accès authentifié, avec sauvegarde protégée par la révision du salon. Contacts et les fiches statistiques ne font aucune requête dédiée : l’historique est local au navigateur et les profils visibles sont déjà dans l’état du salon.
 
 Le gain en activité est d'environ **65 %**. La présence seule représente au plus environ 240 écritures/heure/salon au nouveau rythme, contre environ 820 à 900 auparavant ; les actions peuvent en éviter certaines. Les mutations de jeu et de chat s'ajoutent. Les opérations SQL, index, nettoyages et éventuelles reprises rendent ces chiffres indicatifs : consulter les métriques `rows_read` et `rows_written` pour les valeurs facturées réelles.
 
