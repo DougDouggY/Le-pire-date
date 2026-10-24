@@ -23,25 +23,45 @@ async function eventually(check,message){
  while(Date.now()<end){if(await check())return;await delay(100);}
  assert.fail(message);
 }
-async function open(page){await page.goto(`${baseURL}/solo/index.html`);await page.click('#openMultiplayer');}
-async function createPair(browser,mode){
+async function open(page,name='Camille'){await page.goto(`${baseURL}/solo/index.html`);await page.click('#openMultiplayer');if(await page.locator('#mp-player-name').count())await page.fill('#mp-player-name',name);}
+async function createPair(browser,mode,names=['Alex','Robin']){
  const contexts=await Promise.all([browser.newContext(),browser.newContext()]);
  const pages=await Promise.all(contexts.map(c=>c.newPage()));
  for(const page of pages){
   page.setDefaultTimeout(30000);
-  page.errors=[];page.on('pageerror',e=>page.errors.push(e.message));
+  page.errors=[];page.dialogs=[];page.on('dialog',async dialog=>{page.dialogs.push(dialog.message());await dialog.dismiss();});page.on('pageerror',e=>page.errors.push(e.message));
   page.on('response',r=>{if(r.url().startsWith(baseURL)&&r.status()>=400)page.errors.push(`HTTP ${r.status()}: ${new URL(r.url()).pathname}`);});
  }
- await Promise.all(pages.map(open));
+ await Promise.all(pages.map((page,role)=>open(page,names[role])));
  await pages[0].click('#mp-create');await pages[0].locator('.mp-code').waitFor();
  const code=await pages[0].locator('.mp-code').textContent();
  await pages[1].fill('#mp-join-code',code);await pages[1].click('#mp-join');
  await pages[1].locator('#mp-ready').waitFor();
+ await pages[0].locator('[data-player-role="1"]').filter({hasText:'Robin'}).waitFor();await pages[0].click('[data-player-role="1"]');assert.equal(await pages[0].locator('dialog[open] h2').textContent(),'Robin');await pages[0].click('#mp-profile-close');
+ await pages[1].click(`[data-suggest-mode="${mode}"]`);
+ await eventually(async()=>await pages[0].locator('.mp-suggestion').count()>0,'Mode suggestion was not shown to host');
+ assert.equal((await view(pages[0])).mode,null,'Guest suggestion changed the selected mode');
  await pages[0].click(`[data-mode="${mode}"]`);
  await eventually(async()=>await pages[1].locator('#mp-ready').isEnabled(),'Guest never received selected mode');
  await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
+ if(mode==='doubleDate')await prepareDoubleDate(pages);
  await Promise.all(pages.map(p=>p.locator('.mp-candidates').waitFor()));
  return {contexts,pages};
+}
+async function prepareDoubleDate(pages){
+ for(const [role,page] of pages.entries()){
+  await page.locator('#mp-city').waitFor();await page.fill('#mp-city',role?'Lyon':'Paris');await page.click('#mp-city-next');await page.locator('#mp-like-profile').waitFor();
+ }
+ const first=await pages[0].locator('#mp-like-profile').getAttribute('data-profile');
+ const before=(await view(pages[1])).foxy.profiles.map(p=>p.id);assert(!before.includes(first));
+ await pages[0].click('#mp-like-profile');await pages[0].locator('[data-foxy-step="waiting"]').waitFor();
+ await eventually(async()=>(await view(pages[1])).foxy.profiles.length===1,'Compatible profile was not selected');
+ const counterpart=(await view(pages[1])).foxy.profiles[0].id;
+ await pages[1].locator(`#mp-like-profile[data-profile="${counterpart}"]`).waitFor();await pages[1].click('#mp-like-profile');
+ await Promise.all(pages.map(p=>p.locator('[data-venue]').first().waitFor()));
+ await pages[0].click('[data-venue="kebab"]');await pages[1].click('[data-venue="arcade"]');
+ assert.equal((await view(pages[0])).stage,'venue','Disagreeing venue votes started the date');
+ await pages[1].click('[data-venue="kebab"]');
 }
 async function identify(pages,mode){
  if(mode==='coach'){
@@ -152,7 +172,7 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
     assert.equal(single.dossier,undefined);assert.equal(single.targetImage,undefined);
     assert(coach.dossier.secret);assert.equal(coach.scene.options,undefined);
     assert.equal(await pages[1].locator('[data-option]').count(),0);
-    await pages[1].locator('summary').first().click();
+    await pages[1].locator('.mp-dossier summary').first().click();
     await pages[1].fill('#mp-chat-text','Un indice en cours de rédaction');
     await pages[0].fill('#mp-chat-text','Je te laisse me guider.');
     await pages[0].locator('#mp-chat-form button').click();
@@ -164,9 +184,11 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
    if(mode==='doubleDate')assert.match(ending.ending,policy==='win'?/Les deux rendez-vous se prolongent/:/équipe échoue/);
    if(mode==='versus'){assert.equal(ending.winner,policy==='win'?0:null);assert.match(ending.ending,policy==='win'?/joueur 1/:/rentrer seule/);}
    if(mode==='coach')assert.match(ending.ending,policy==='win'?/deuxième rendez-vous/:/remercie pour la soirée/);
+   for(const page of pages){const local=await page.evaluate(()=>window.LP_CONTACTS.data());assert.equal(local.stats.games,1);assert.equal(Object.values(local.players)[0].stats.games,1);}
+   await pages[0].click('#mp-contacts');await pages[0].locator('#player-contact-list').waitFor();assert.equal(await pages[0].locator('[data-contact]').count(),1);if(policy==='win')assert.equal(await pages[0].locator('[data-date]').count(),1);await pages[0].click('#contactsBack');await pages[0].click('#openMultiplayer');await pages[0].locator('#mp-rematch').waitFor();assert.equal(await pages[0].evaluate(()=>window.LP_CONTACTS.data().stats.games),1);
    if(mode==='coach'&&policy==='win'){
     const previous=(await view(pages[1])).dossier.name;
-    await pages[1].click('#mp-swap');
+    await pages[1].click('#mp-swap');assert.equal((await view(pages[1])).phase,'playing');await pages[0].click('#mp-swap');
     await Promise.all(pages.map(p=>p.locator('#mp-ready').waitFor()));
     await eventually(async()=>await pages[1].locator('[data-mode]').count()===3,'Swapped host did not regain lobby controls');
     await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
@@ -174,10 +196,38 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
     assert.notEqual((await view(pages[0])).dossier.name,previous);
     // Same UI workflow, but the physical devices now have the opposite roles.
     const swapped=[pages[1],pages[0]];await identify(swapped,mode);await play(swapped,mode,'win');
+    for(const page of pages){const local=await page.evaluate(()=>window.LP_CONTACTS.data());assert.equal(local.stats.games,2);assert.equal(Object.values(local.players)[0].stats.games,2);assert.equal(Object.keys(local.dates).length,2);}
    }
-   await pages[0].click('#mp-rematch');await Promise.all(pages.map(p=>p.locator('#mp-ready').waitFor()));
+   await pages[0].click('#mp-rematch');assert.equal((await view(pages[0])).phase,'playing');await pages[1].click('#mp-rematch');await Promise.all(pages.map(p=>p.locator('#mp-ready').waitFor()));
    for(const page of pages){assert.deepEqual(page.errors,[]);assert.equal(await page.locator('.mp-error').count(),0);}
    await Promise.all(contexts.map(c=>c.close()));
   }finally{await browser.close();}
  });
 }
+
+test('solo success adds a date contact and keeps it after reloading the phone',{timeout:90000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(`${baseURL}/solo/index.html`);
+  assert.equal(await page.locator('.home-app').count(),4);
+  await page.locator('.phone-tools summary').click();await page.click('#openTestMode');await page.click('[data-id="zoe"]');
+  await page.click('.guest-card[data-target="true"]');await page.locator('[data-choice]').first().waitFor();
+  const slots=await page.evaluate(()=>window.DD_DATA.profiles.find(p=>p.id==='zoe').slots);
+  for(const slot of slots){await page.click(`[data-choice="${slot}"]`);await page.click('#continueBtn');}
+  await page.locator('#restartEnd').waitFor();
+  assert.equal(await page.evaluate(()=>window.LP_CONTACTS.data().dates.zoe.wins),1);
+  await page.reload();await page.click('#openContacts');await page.locator('[data-date="zoe"]').waitFor();
+  assert.equal(await page.evaluate(()=>window.LP_CONTACTS.data().dates.zoe.wins),1);
+  assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
+
+test('display names remain text in player profiles and the shared date roster',{timeout:120000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const name='<svg onload=alert(1)>';
+  const {pages}=await createPair(browser,'doubleDate',[name,'Robin']);await identify(pages,'doubleDate');
+  for(const page of pages){assert.equal(await page.locator('#mp-content svg').count(),0);assert((await page.locator('#mp-content').textContent()).includes(name));assert.deepEqual(page.errors,[]);assert.deepEqual(page.dialogs,[]);}
+ }finally{await browser.close();}
+});
