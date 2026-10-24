@@ -17,11 +17,11 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    const body=await readActionBody(request) as {type?:string;code?:string;token?:string;mode?:string;action?:Record<string,unknown>};
-    if(body.type==='create') { const room=await createRoom(db(),body.mode); return json(room); }
+    const body=await readActionBody(request) as {type?:string;code?:string;token?:string;mode?:string;player?:{id?:string;name?:string;stats?:Record<string,number>};action?:Record<string,unknown>};
+    if(body.type==='create') { const room=await createRoom(db(),body.mode,body.player); return json(room); }
     if(body.type==='join') {
       if(typeof body.code!=='string'||!/^[A-Z0-9]{8}$/.test(body.code.toUpperCase()))return json({error:'Code de salon invalide.'},400);
-      return json(await joinRoom(db(),body.code.toUpperCase()));
+      return json(await joinRoom(db(),body.code.toUpperCase(),body.player));
     }
     if(!body.code||!body.token||!body.action) return json({error:'Requête incomplète.'},400);
     validateRoomAccess(body.code.toUpperCase(),body.token);

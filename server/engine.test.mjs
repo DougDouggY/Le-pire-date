@@ -10,7 +10,7 @@ class MemoryD1 {
 const optionsOf=scene=>scene.options;
 const best=scene=>optionsOf(scene).toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
 const score=e=>Object.entries(e||{}).filter(([k])=>k!=='group').reduce((n,[,v])=>n+v,0)+(e?.group||0);
-async function createPair(mode){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});return {db,host,guest};}
+async function createPair(mode,prepare=true){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});}return {db,host,guest};}
 async function identifyCorrect({db,host,guest},mode){const row=db.rows.get(host.code),room=JSON.parse(row.state_json),m=room.match;
  if(mode==='doubleDate'){
   for(let role=0;role<2;role++){const key=m.seats[role].find(x=>x.target).key;await act(db,host.code,role?guest.token:host.token,{type:'identify',key});}
@@ -47,7 +47,7 @@ test('Coach match uses asymmetric access and resolves all four authored scenes',
 test('Coach revenge can invert roles and starts a different investigation',async()=>{
  const match=await createPair('coach');await identifyCorrect(match,'coach');const profileId=JSON.parse(match.db.rows.get(match.host.code).state_json).match.profileId;
  for(let i=0;i<4;i++){const view=publicState(JSON.parse(match.db.rows.get(match.host.code).state_json),0);await act(match.db,match.host.code,match.host.token,{type:'answer',option:view.scene.options[0].id});}
- const result=await readRoom(match.db,match.host.code,match.host.token);assert(result.room.match.done);await act(match.db,match.host.code,match.host.token,{type:'swapRoles'});
+ const result=await readRoom(match.db,match.host.code,match.host.token);assert(result.room.match.done);await act(match.db,match.host.code,match.host.token,{type:'swapRoles'});await act(match.db,match.host.code,match.guest.token,{type:'swapRoles'});
  assert.equal((await readRoom(match.db,match.host.code,match.host.token)).role,1);assert.equal((await readRoom(match.db,match.host.code,match.guest.token)).role,0);
  await act(match.db,match.host.code,match.guest.token,{type:'ready',value:true});await act(match.db,match.host.code,match.host.token,{type:'ready',value:true});const next=JSON.parse(match.db.rows.get(match.host.code).state_json).match;assert.notEqual(next.profileId,profileId);
 });
@@ -160,8 +160,9 @@ test('either Coach player may request a swap and receives their actual new role'
    await act(match.db,match.host.code,match.host.token,{type:'answer',option:view.scene.options[0].id});
   }
   const token=caller?match.guest.token:match.host.token;
-  const view=await act(match.db,match.host.code,token,{type:'swapRoles'});
-  assert.equal(view.me,1-caller);assert.equal((await readRoom(match.db,match.host.code,token)).role,view.me);
+  const vote=await act(match.db,match.host.code,token,{type:'swapRoles'});assert.equal(vote.me,caller);assert.equal(vote.phase,'playing');
+  await act(match.db,match.host.code,caller?match.host.token:match.guest.token,{type:'swapRoles'});
+  assert.equal((await readRoom(match.db,match.host.code,token)).role,1-caller);
  }
 });
 
@@ -204,4 +205,48 @@ test('heartbeats skip redundant writes and real actions refresh presence',async(
  await act(match.db,match.host.code,match.host.token,{type:'chat',text:'Un indice'});
  assert(Date.now()-JSON.parse(row.state_json).lastSeen[0]<1000);
  assert.match(match.host.code,/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/);
+});
+
+
+test('Double Date keeps locations private and requires both likes and an agreed venue',async()=>{
+ const match=await createPair('doubleDate',false),{db,host,guest}=match;
+ let room=(await readRoom(db,host.code,host.token)).room;
+ assert.equal(publicState(room,0).stage,'foxy');assert.equal(publicState(room,0).foxy.step,'location');
+ assert.equal(publicState(room,0).scene,undefined);assert.equal(publicState(room,1).seats,undefined);
+ await act(db,host.code,host.token,{type:'location',city:'Ville secrète du premier'});
+ await act(db,host.code,guest.token,{type:'location',city:'Ville secrète du second'});
+ room=(await readRoom(db,host.code,host.token)).room;
+ const h=publicState(room,0),g=publicState(room,1);
+ assert(!JSON.stringify(h).includes('Ville secrète du second'));assert(!JSON.stringify(g).includes('Ville secrète du premier'));
+ assert(h.foxy.profiles.every(p=>!g.foxy.profiles.some(x=>x.id===p.id)));
+ const pair=CONTENT.doubleDate.pairs[1];
+ await act(db,host.code,host.token,{type:'likeProfile',profileId:pair.profiles[0]});
+ assert.equal(publicState((await readRoom(db,host.code,host.token)).room,0).foxy.step,'waiting');
+ await assert.rejects(()=>act(db,host.code,guest.token,{type:'likeProfile',profileId:CONTENT.doubleDate.pairs[0].profiles[1]}),/compatible/);
+ await act(db,host.code,guest.token,{type:'likeProfile',profileId:pair.profiles[1]});
+ await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});
+ await act(db,host.code,guest.token,{type:'venue',venueId:'arcade'});
+ assert.equal(publicState((await readRoom(db,host.code,host.token)).room,0).stage,'venue');
+ await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});
+ room=(await readRoom(db,host.code,host.token)).room;
+ assert.equal(room.match.venue.id,'kebab');assert.equal(room.match.kind,pair.id);
+ assert.deepEqual(publicState(room,0).seats.map(s=>s.key),publicState(room,1).seats.map(s=>s.key));
+ await identifyCorrect(match,'doubleDate');
+ assert.equal((await readRoom(db,host.code,host.token)).room.match.stage,'conversation');
+});
+
+test('guest suggestions do not choose the mode and one rematch vote cannot reset a game',async()=>{
+ const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);
+ const suggestion=await act(db,host.code,guest.token,{type:'suggestMode',mode:'coach'});
+ assert.equal(suggestion.mode,null);assert.equal(suggestion.modeSuggestions[1],'coach');
+ await assert.rejects(()=>act(db,host.code,guest.token,{type:'mode',mode:'coach'}),/impossible/);
+ const match=await createPair('coach');await identifyCorrect(match,'coach');
+ for(let i=0;i<4;i++){const v=publicState((await readRoom(match.db,match.host.code,match.host.token)).room,0);await act(match.db,match.host.code,match.host.token,{type:'answer',option:v.scene.options[0].id});}
+ const initial=publicState((await readRoom(match.db,match.host.code,match.host.token)).room,0);
+ const first=await act(match.db,match.host.code,match.host.token,{type:'continue'});
+ assert.equal(first.phase,'playing');assert.equal(first.rematchVotes[0],'lobby');assert.equal(first.result.id,initial.result.id);
+ const cancel=await act(match.db,match.host.code,match.host.token,{type:'continue',value:false});assert.equal(cancel.rematchVotes[0],null);
+ await act(match.db,match.host.code,match.host.token,{type:'continue'});
+ const second=await act(match.db,match.host.code,match.guest.token,{type:'continue'});
+ assert.equal(second.phase,'lobby');assert.deepEqual(second.ready,[false,false]);assert.equal(second.participants[0].stats.games,1);
 });

@@ -39,12 +39,12 @@ Limites relevées dans la documentation officielle :
 
 La disponibilité d'un compte Cloudflare gratuit ne prouve pas que son offre **Workers** est Free, ni qu'il lui reste du quota. Vérifier le forfait Workers, la consommation de l'autre jeu et la disponibilité d'un emplacement D1 avant création. Aucun état du compte n'a été inspecté pendant cette préparation.
 
-Le paquet autonome vérifié localement pèse environ 25 Ko compressés, avec 85 fichiers statiques au moment de la préparation. La taille ne pose pas de difficulté identifiée. Le respect des 10 ms CPU devra être confirmé dans les métriques du Worker réel : une simulation locale ne prouve pas cette limite en production.
+Le paquet autonome vérifié localement pèse environ 27 Ko compressés, avec 88 fichiers statiques au moment de la préparation. La taille ne pose pas de difficulté identifiée. Le respect des 10 ms CPU devra être confirmé dans les métriques du Worker réel : une simulation locale ne prouve pas cette limite en production.
 
 ### Synchronisation préparée
 
 - Avant : lecture toutes les 2,2 s, plus une requête de présence approximativement toutes les 8 à 8,8 s, suivie d'une lecture supplémentaire au même cycle.
-- Maintenant : une requête toutes les **5 s** en activité ; **10 s** après 30 s sans changement ou en attendant un partenaire ; **20 s** après deux minutes sans changement ou en fin de partie.
+- Maintenant : une requête toutes les **5 s** en activité ; **10 s** après 30 s sans changement ou en attendant un partenaire ; **20 s** après deux minutes sans changement ou en fin de partie sans vote actif. Les votes de revanche relancent temporairement le rythme de 5 s, puis le délai augmente de nouveau si personne ne répond.
 - Le navigateur envoie un heartbeat au prochain cycle après **30 s** sans action. La réponse contient déjà l'état : aucun GET supplémentaire au même cycle.
 - Les actions normales renouvellent la présence avec leur écriture existante. Les heartbeats reçus trop fréquemment sont lus, mais ne réécrivent pas la ligne avant 25 s.
 - Les onglets masqués et les fenêtres multijoueur fermées arrêtent la synchronisation. Le retour au premier plan relance immédiatement la présence et la lecture.
@@ -60,6 +60,8 @@ Ordres de grandeur pour **un salon, deux joueurs, une seule fenêtre chacun**, h
 | Attente prolongée, 10 s | Environ 720 |
 | Inactivité/fin, 20 s | Environ 360 |
 | Deux fenêtres fermées/onglets masqués | 0 requête périodique après les appels déjà en vol |
+
+La préparation Foxy Duo du Double Date ajoute six actions ponctuelles lorsque les deux joueurs sont directement d’accord (ville, like et vote du lieu pour chacun). Les suggestions, changements de choix et votes de revanche s’ajoutent également. Contacts et les fiches statistiques ne font aucune requête dédiée : l’historique est local au navigateur et les profils visibles sont déjà dans l’état du salon.
 
 Le gain en activité est d'environ **65 %**. La présence seule représente au plus environ 240 écritures/heure/salon au nouveau rythme, contre environ 820 à 900 auparavant ; les actions peuvent en éviter certaines. Les mutations de jeu et de chat s'ajoutent. Les opérations SQL, index, nettoyages et éventuelles reprises rendent ces chiffres indicatifs : consulter les métriques `rows_read` et `rows_written` pour les valeurs facturées réelles.
 
