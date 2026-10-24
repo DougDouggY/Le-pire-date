@@ -25,12 +25,17 @@ export function publicState(room, role){
  const base={phase:room.phase,mode:room.mode,difficulty:room.difficulty||'normal',players:(room.lastSeen||[Date.now(),Date.now()]).map(t=>Date.now()-t<15000),ready:room.ready.map(Boolean),chat:room.chat.slice(-30).map(m=>({role:m.role,text:m.text,at:m.at})),me:role,updated:room.updated};
  if(room.phase==='lobby') return base;
  const m=room.match, mode=m.mode;
+ const identification={
+  identifying:!!m.seats,
+  identified:!!m.identified?.[role],
+  seats:(mode==='doubleDate'?m.seats?.[role]:m.seats)?.map(({key,image,cue})=>room.difficulty==='facile'?{key,image,cue}:{key,image})||null,
+ };
  if(mode==='doubleDate'){
   const pair=getPair(m.kind), scene=sceneFor(m);
-  return {...base, pair:{title:pair.title,relation:pair.relation,opening:pair.opening}, seats:m.seats?.[role]?.map(({key,image,cue})=>room.difficulty==='facile'?{key,image,cue}:{key,image})||null, identified:m.identified?.[role]||false, profiles:m.pair.profiles.map((id,i)=>{const p=getProfile(mode,id);return {...publicProfile(p,room.difficulty==='facile'),photo:facePath(p),mine:i===role}}),round:m.round+1,total:pair.rounds.length,scene:scene?{id:scene.id,prompt:scene.prompt,options:scene.options.map(o=>({id:o.id,text:o.text}))}:null,selected:Object.keys(m.picks).includes(String(role)),revealed:Object.keys(m.picks).length===2?m.picks:null,ending:m.done?m.ending:null};
+  return {...base,...identification, pair:{title:pair.title,relation:pair.relation,opening:pair.opening}, profiles:m.pair.profiles.map((id,i)=>{const p=getProfile(mode,id);return {...publicProfile(p,room.difficulty==='facile'),photo:facePath(p),mine:i===role}}),round:Math.min(m.round+1,pair.rounds.length),total:pair.rounds.length,scene:scene?{id:scene.id,prompt:scene.prompt,options:scene.options.map(o=>({id:o.id,text:o.text}))}:null,selected:Object.keys(m.picks).includes(String(role)),revealed:null,lastReveal:m.lastReveal||null,ending:m.done?m.ending:null};
  }
  const p=getProfile(mode,m.profileId), scenes=p.scenes||p.stories||[], scene=sceneFor(m);
- const result={...base,round:m.round+1,total:scenes.length,selected:Object.keys(m.picks).includes(String(role)),revealed:Object.keys(m.picks).length===2?m.picks:null,ending:m.done?m.ending:null,lastReveal:m.lastReveal||null};
+ const result={...base,...identification,round:Math.min(m.round+1,scenes.length),total:scenes.length,selected:Object.keys(m.picks).includes(String(role)),revealed:null,ending:m.done?m.ending:null,winner:m.done?m.winner:null,lastReveal:m.lastReveal||null};
  if(mode==='versus') return {...result,profile:{...publicProfile(p,room.difficulty==='facile'),photo:facePath(p)},scene:scene?{id:scene.id,prompt:scene.prompt,turn:scene.turn||'simultaneous',options:scene.turn&&scene.turn!=='simultaneous'&&Number(scene.turn.slice(-1))!==role?[]:scene.options.map(o=>({id:o.id,text:o.text}))}:null};
  // Coach: only coach receives target dossier; seat never receives profile ID, correct choice, or private clues.
  if(role===1) return {...result,roleView:'coach',dossier:coachDossier(p),targetImage:facePath(p),scene:scene?{id:scene.id,prompt:scene.prompt}:null};
@@ -85,7 +90,9 @@ async function actOnce(db,roomCode,bearer,action){
   const body=String(action.text||'').trim().slice(0,280);if(!body)throw Error('Message vide');room.chat.push({role,text:body,at:now});room.chat=room.chat.slice(-60);await save(db,row,room);return publicState(room,role);
  }
  if(action.type==='answer'){
-  const m=room.match;if(room.phase!=='playing'||m.done||!m.identified?.every(Boolean))throw Error('Le rendez-vous n’est pas prêt');const scenes=scenesFor(m),scene=sceneFor(m);if(!scene)throw Error('Plus de scène');const option=scene.options.find(o=>o.id===action.option);if(!option)throw Error('Réponse inconnue');
+  const m=room.match;if(room.phase!=='playing'||m.done||!m.identified?.every(Boolean))throw Error('Le rendez-vous n’est pas prêt');const scenes=scenesFor(m),scene=sceneFor(m);if(!scene)throw Error('Plus de scène');
+  if((action.round!==undefined&&action.round!==m.round+1)||(action.sceneId!==undefined&&action.sceneId!==scene.id))throw Error('La scène a changé, recharge la partie');
+  const option=scene.options.find(o=>o.id===action.option);if(!option)throw Error('Réponse inconnue');
   if(m.mode==='coach'){if(role!==0)throw Error('Le coach conseille, le célibataire répond');const score=m.scores[0];applyEffect(score,option.effect,room.difficulty);m.lastReveal=[{role:0,option:option.id,text:option.text,reply:option.reply}];if(option.memory)m.memories.push({round:m.round,role:0,tag:option.memory});m.round++;if(m.round>=scenes.length){m.done=true;const pass=room.difficulty==='facile'?score.connection>=3&&score.trust>=0:room.difficulty==='difficile'?score.connection>=6&&score.trust>=2:score.connection>=4&&score.trust>=1;m.ending=pass?'Elle propose un deuxième rendez-vous. Votre ami a su écouter, et toi l’aider à lire ce qui n’était pas dit.':'Elle vous remercie pour la soirée. Vous avez repéré certains indices, mais pas encore trouvé la bonne façon d’y répondre.';m.winner=pass?0:null;}await save(db,row,room);return publicState(room,role);}
   if(m.picks[role])throw Error('Réponse déjà envoyée');
   if(m.mode==='versus'&&scene.turn&&scene.turn!=='simultaneous'){const actor=Number(scene.turn.slice(-1));if(role!==actor)throw Error('Cette question s’adresse à l’autre prétendant');m.picks[role]=option.id;applyEffect(m.scores[role],option.effect,room.difficulty);if(option.memory)m.memories.push({round:m.round,role,tag:option.memory});m.lastReveal=[{role,option:option.id,text:option.text,reply:option.reply}];m.round++;m.picks={};finalizeMatch(room,m,scenes);await save(db,row,room);return publicState(room,role);}
@@ -105,7 +112,7 @@ async function actOnce(db,roomCode,bearer,action){
  if(action.type==='swapRoles'){
   if(room.mode!=='coach'||!room.match?.done)throw Error('L’inversion est disponible après une partie Coach');
   room.previousProfileId=room.match.profileId;room.phase='lobby';room.ready=[false,false];room.match=null;room.chat=[];room.updated=now;
-  const r=await db.prepare('UPDATE multiplayer_rooms SET host_token_hash=?,guest_token_hash=?,state_json=?,revision=revision+1,updated_at=? WHERE code=? AND revision=?').bind(row.guest_token_hash,row.host_token_hash,JSON.stringify(room),now,row.code,row.revision).run();if(!r.meta?.changes)throw Error('État modifié, recharge la partie');return publicState(room,1);
+  const r=await db.prepare('UPDATE multiplayer_rooms SET host_token_hash=?,guest_token_hash=?,state_json=?,revision=revision+1,updated_at=? WHERE code=? AND revision=?').bind(row.guest_token_hash,row.host_token_hash,JSON.stringify(room),now,row.code,row.revision).run();if(!r.meta?.changes)throw Error('État modifié, recharge la partie');return publicState(room,1-role);
  }
  throw Error('Action inconnue');
 }

@@ -6,6 +6,7 @@ export function configureToolEnvironment(projectRoot) {
   const runtimeRoot =
     process.env.SITES_RUNTIME_ROOT || path.join(projectRoot, ".sites-runtime");
   const defaults = {
+    XDG_CONFIG_HOME: path.join(runtimeRoot, "xdg-config"),
     CLOUDFLARE_CF_FETCH_ENABLED: "false",
     WRANGLER_SEND_METRICS: "false",
     WRANGLER_WRITE_LOGS: "false",

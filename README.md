@@ -33,3 +33,36 @@ pnpm run lint
 Le validateur contrôle les champs des profils, les portraits, les scénarios complets, les trois choix et leurs réactions, l’unicité des personnages et l’accessibilité des branches. Les tests couvrent les trois modes, les projections de données privées, la résolution, les issues gagnantes et sans gagnant, la reconnexion et l’inversion des rôles.
 
 Après modification du schéma Drizzle, lancer `pnpm run db:generate`. Les migrations de production sont appliquées par le flux de publication Sites. En local, appliquer les migrations pending avec Wrangler au stockage `.wrangler/state` du preview.
+
+## Démarrer et tester le multijoueur local
+
+Depuis la racine du dépôt, avec Node >=22.13 et pnpm 11.25.0 :
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run build
+```
+
+Pour une **nouvelle base locale uniquement**, appliquer les deux migrations existantes dans cet ordre. Ces commandes ne ciblent aucune base distante ; ne pas les rejouer sur une base déjà initialisée :
+
+```sh
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_lazy_sage.sql --yes
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_motionless_stryfe.sql --yes
+pnpm run dev
+```
+
+Laisser le serveur tourner, puis lancer dans un autre terminal :
+
+```sh
+pnpm run validate:narrative
+pnpm run test:narrative
+pnpm exec tsc --noEmit --incremental false
+pnpm run lint
+pnpm run test:multiplayer
+```
+
+Les tests navigateur utilisent deux contextes Chromium indépendants et la véritable API avec la D1 locale. Ils couvrent les trois modes, les victoires et échecs, les informations privées, le chat, les réactions, la reconnexion et les revanches, dont l'inversion des rôles Coach. Ils créent des salons de test dans la base locale et ne doivent pas être dirigés vers la production.
+
+Un Chromium installé est nécessaire. `/usr/bin/chromium` est détecté automatiquement ; sinon définir `CHROMIUM_PATH`, ou installer le navigateur Playwright avec `pnpm exec playwright-core install chromium`. `MULTIPLAYER_TEST_URL` permet de choisir l'adresse du serveur local (par défaut `http://127.0.0.1:5173`). Dans un conteneur CI nécessitant Chromium sans sandbox, lancer `CI=1 pnpm run test:multiplayer`.
+
+Le schéma `db/schema.ts` décrit `multiplayer_rooms` et correspond aux migrations conservées dans `drizzle/`. Les changements de cette version n'exigent aucune migration supplémentaire et ne suppriment aucune donnée. Aucun déploiement Cloudflare n'est réalisé par les commandes ci-dessus.

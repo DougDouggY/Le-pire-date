@@ -1,9 +1,13 @@
-import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const notes = sqliteTable("notes", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
-  content: text("content").notNull().default(""),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+// Keep this definition aligned with the existing multiplayer migrations.
+export const multiplayerRooms = sqliteTable("multiplayer_rooms", {
+  code: text("code").primaryKey().notNull(),
+  hostTokenHash: text("host_token_hash").notNull(),
+  guestTokenHash: text("guest_token_hash"),
+  stateJson: text("state_json").notNull(),
+  revision: integer("revision").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
 });
