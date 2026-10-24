@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "le-pire-date-db",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "5346c540-0b83-4e19-9675-55489202c21f",
       "migrations_dir": "./drizzle"
     }
   ]
