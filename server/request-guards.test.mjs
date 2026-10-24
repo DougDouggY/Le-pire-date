@@ -21,7 +21,9 @@ test('reject foreign origins, malformed JSON and oversized bodies',async()=>{
 test('remote command guards reject placeholder D1 and any different target',()=>{
  const config=JSON.parse(readFileSync(new URL('../wrangler.le-pire-date.json',import.meta.url),'utf8'));
  assert.doesNotThrow(()=>validateConfig(config));
- assert.throws(()=>validateConfig(config,{remote:true}),/NOUVELLE base/);
+ assert.doesNotThrow(()=>validateConfig(config,{remote:true}));
+ const placeholder={...config,d1_databases:[{...config.d1_databases[0],database_id:'00000000-0000-4000-8000-000000000000'}]};
+ assert.throws(()=>validateConfig(placeholder,{remote:true}),/NOUVELLE base/);
  assert.throws(()=>validateConfig({...config,name:'other-game'}),/refusée/);
  assert.throws(()=>validateConfig({...config,services:[{binding:'OTHER',service:'other-game'}]}),/autre service/);
 });
