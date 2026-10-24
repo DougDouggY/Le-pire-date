@@ -1,0 +1,1 @@
+DROP TABLE `multiplayer_messages`;
