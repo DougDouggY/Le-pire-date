@@ -16,7 +16,7 @@ Les premiers lots contiennent quatre profils par mode, deux combinaisons compati
 - `app/api/multiplayer/route.ts` expose les actions de salon.
 - `server/engine.mjs` est l’autorité de partie : rôles, salons, présence, choix simultanés, souvenirs, résultats, reconnexion et inversion des rôles.
 - Les salons, jetons hachés, révisions et états sont stockés dans Cloudflare D1. Le code du salon sert à rejoindre une place libre; les actions suivantes exigent le jeton individuel.
-- Les clients interrogent D1 toutes les 2,2 secondes; un battement de présence est écrit toutes les 8 secondes et une absence est détectée après 15 secondes. Cela évite les connexions permanentes, mais consomme les quotas D1 : la gratuité Cloudflare dépend des limites en vigueur et du volume réel.
+- La synchronisation utilise une requête toutes les 5 secondes en activité, puis 10 à 20 secondes au repos. Une requête de présence remplace la lecture environ toutes les 30 secondes sans action ; les actions renouvellent déjà la présence. Les onglets masqués et la fenêtre multijoueur fermée arrêtent les requêtes périodiques. Une absence est détectée après 90 secondes. Les quotas gratuits sont partagés au niveau du compte Cloudflare.
 - Le navigateur ne reçoit pas les effets de réponse. Le célibataire ne reçoit jamais le dossier Coach. Les choix Date à 3 restent privés jusqu’à ce que les deux soient envoyés.
 
 ## Développement et validation
@@ -43,11 +43,12 @@ pnpm install --frozen-lockfile
 pnpm run build
 ```
 
-Pour une **nouvelle base locale uniquement**, appliquer les deux migrations existantes dans cet ordre. Ces commandes ne ciblent aucune base distante ; ne pas les rejouer sur une base déjà initialisée :
+Pour une **nouvelle base locale uniquement** du workflow Vinext, appliquer les trois migrations dans cet ordre. Ces commandes ne ciblent aucune base distante ; ne pas les rejouer sur une base déjà initialisée. Le workflow Cloudflare indépendant décrit plus bas dispose d'une commande de migration idempotente :
 
 ```sh
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_lazy_sage.sql --yes
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_motionless_stryfe.sql --yes
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_room-expiry-index.sql --yes
 pnpm run dev
 ```
 
@@ -65,4 +66,4 @@ Les tests navigateur utilisent deux contextes Chromium indépendants et la véri
 
 Un Chromium installé est nécessaire. `/usr/bin/chromium` est détecté automatiquement ; sinon définir `CHROMIUM_PATH`, ou installer le navigateur Playwright avec `pnpm exec playwright-core install chromium`. `MULTIPLAYER_TEST_URL` permet de choisir l'adresse du serveur local (par défaut `http://127.0.0.1:5173`). Dans un conteneur CI nécessitant Chromium sans sandbox, lancer `CI=1 pnpm run test:multiplayer`.
 
-Le schéma `db/schema.ts` décrit `multiplayer_rooms` et correspond aux migrations conservées dans `drizzle/`. Les changements de cette version n'exigent aucune migration supplémentaire et ne suppriment aucune donnée. Aucun déploiement Cloudflare n'est réalisé par les commandes ci-dessus.
+Le schéma `db/schema.ts` décrit `multiplayer_rooms`. La migration supplémentaire `0002_room-expiry-index.sql` ajoute un index pour le nettoyage des salons expirés, sans suppression de donnée. Pour la configuration indépendante, les migrations suivies automatiquement et les commandes de publication, suivre le [guide Cloudflare](DEPLOIEMENT_CLOUDFLARE.md). Aucun déploiement n'est réalisé par la préparation locale.

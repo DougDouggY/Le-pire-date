@@ -15,6 +15,13 @@
       "when": 1792849572831,
       "tag": "0001_motionless_stryfe",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792863171350,
+      "tag": "0002_room-expiry-index",
+      "breakpoints": true
     }
   ]
 }

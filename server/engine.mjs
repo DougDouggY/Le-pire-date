@@ -1,9 +1,11 @@
 import { CONTENT, NARRATIVE_BRANCHES, NARRATIVE_OBSERVATIONS, getPair, getProfile, publicProfile, coachDossier } from './content.mjs';
 const modes = ['doubleDate','versus','coach'];
+export const PRESENCE_TIMEOUT_MS=90000;
+const HEARTBEAT_MIN_INTERVAL_MS=25000;
 const pick=(xs)=>xs[Math.floor(Math.random()*xs.length)];
 const token=()=>crypto.randomUUID()+crypto.randomUUID();
 const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,'0')).join('');
-const code=()=>Math.random().toString(36).slice(2,6).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
+const code=()=>Array.from(crypto.getRandomValues(new Uint8Array(8)),n=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n&31]).join('');
 function facePath(profile){ const pool=CONTENT[profile.mode]?.profiles||[]; const i=pool.findIndex(x=>x.id===profile.id); return `/solo/assets/mp/${profile.mode}-${i+1}.webp`; }
 function buildMatch(mode, excluded=null){
  const content=CONTENT[mode];
@@ -22,7 +24,7 @@ export function initRoom(mode){ if(!modes.includes(mode)) throw Error('Mode inco
 export function startRoom(){return {phase:'lobby',mode:null,difficulty:'normal',players:[true,false],ready:[false,false],match:null,chat:[],lastSeen:[Date.now(),0]};}
 function candidateSet(profile, mode){ const all=CONTENT[mode].profiles; const targetIndex=all.findIndex(p=>p.id===profile.id); const seats=all.map((p,i)=>({key:`seat-${crypto.randomUUID().slice(0,8)}`,image:facePath(p),cue:p.face.cue,target:i===targetIndex}));for(let i=seats.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[seats[i],seats[j]]=[seats[j],seats[i]];}return seats; }
 export function publicState(room, role){
- const base={phase:room.phase,mode:room.mode,difficulty:room.difficulty||'normal',players:(room.lastSeen||[Date.now(),Date.now()]).map(t=>Date.now()-t<15000),ready:room.ready.map(Boolean),chat:room.chat.slice(-30).map(m=>({role:m.role,text:m.text,at:m.at})),me:role,updated:room.updated};
+ const base={phase:room.phase,mode:room.mode,difficulty:room.difficulty||'normal',players:(room.lastSeen||[Date.now(),Date.now()]).map(t=>Date.now()-t<PRESENCE_TIMEOUT_MS),ready:room.ready.map(Boolean),chat:room.chat.slice(-30).map(m=>({role:m.role,text:m.text,at:m.at})),me:role,updated:room.updated};
  if(room.phase==='lobby') return base;
  const m=room.match, mode=m.mode;
  const identification={
@@ -66,13 +68,18 @@ async function actOnce(db,roomCode,bearer,action){
   if(!room.players[1]){const guest=token(); const r=await db.prepare('UPDATE multiplayer_rooms SET guest_token_hash=?,revision=revision+1,updated_at=? WHERE code=? AND revision=? AND guest_token_hash IS NULL').bind(await hash(guest),now,row.code,row.revision).run();if(!r.meta?.changes) throw Error('Un autre joueur vient de rejoindre'); room.players[1]=true;room.lastSeen[1]=now; await db.prepare('UPDATE multiplayer_rooms SET state_json=? WHERE code=?').bind(JSON.stringify(room),row.code).run();return {code:row.code,token:guest,role:1,state:publicState(room,1)};}
   return {state:publicState(room,role)};
  }
- if(action.type==='heartbeat'){room.lastSeen[role]=now;await save(db,row,room);return publicState(room,role);}
+ if(action.type==='heartbeat'){
+  if(now-room.lastSeen[role]>=HEARTBEAT_MIN_INTERVAL_MS){room.lastSeen[role]=now;await save(db,row,room);}
+  return publicState(room,role);
+ }
+ // Real actions already write the room: reuse that write to renew presence.
+ room.lastSeen[role]=now;
  if(action.type==='difficulty'){if(role!==0||room.phase!=='lobby'||!['facile','normal','difficile'].includes(action.value))throw Error('Difficulté indisponible');room.difficulty=action.value;room.ready=[false,false];await save(db,row,room);return publicState(room,role);}
  if(action.type==='mode'){
   if(role!==0||room.phase!=='lobby'||!modes.includes(action.mode))throw Error('Choix de mode impossible');room.mode=action.mode;room.ready=[false,false];room.match=null;await save(db,row,room);return publicState(room,role);
  }
  if(action.type==='ready'){
-  if(room.phase!=='lobby'||!room.mode||!room.players[1]||room.lastSeen.some(t=>Date.now()-t>15000))throw Error('Il manque un joueur connecté ou un mode');room.ready[role]=!!action.value;
+  if(room.phase!=='lobby'||!room.mode||!room.players[1]||room.lastSeen.some(t=>Date.now()-t>PRESENCE_TIMEOUT_MS))throw Error('Il manque un joueur connecté ou un mode');room.ready[role]=!!action.value;
   if(room.ready[0]&&room.ready[1]){room.phase='playing';room.match=buildMatch(room.mode,room.previousProfileId||null);room.previousProfileId=null;if(room.mode==='coach')room.match.seats=candidateSet(getProfile('coach',room.match.profileId),'coach');else if(room.mode==='versus')room.match.seats=candidateSet(getProfile('versus',room.match.profileId),'versus');else room.match.seats=room.match.pair.profiles.map(id=>candidateSet(getProfile('doubleDate',id),'doubleDate'));}
   await save(db,row,room);return publicState(room,role);
  }

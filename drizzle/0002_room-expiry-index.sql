@@ -1,0 +1,1 @@
+CREATE INDEX `multiplayer_rooms_expires_at_idx` ON `multiplayer_rooms` (`expires_at`);
