@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171112">
+  <title>Foxy — Pas de temps à perdre</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<main id="app">
+  <div id="venueBg" class="venue-bg"></div><div class="grain"></div>
+  <header class="topline"><div class="brand"><span class="brand-mark">DD</span><div><div class="brand-title">DOUGGY DATE</div><div class="brand-sub">une rencontre, plusieurs façons de tout gâcher</div></div></div><div class="top-buttons"><button id="soundBtn" class="top-btn" aria-label="Activer ou désactiver le son">♫</button><button id="fullBtn" class="top-btn" aria-label="Plein écran">⛶</button></div></header>
+  <section id="phonePage" class="page"><div class="phone-shell"><div id="phoneInner" class="phone-inner"><div class="statusbar"><span id="clock">21:04</span><span class="status-icons">●●● ◔ ▰</span></div><div id="appHeader" class="app-header hidden"><div class="app-head-row"><img class="app-logo" src="./assets/foxy-mascot.webp" alt=""><div><b>Foxy</b><small>Pas de temps à perdre</small></div><span class="app-heart">♥</span></div></div><div id="phoneContent" class="phone-content"></div><div id="phoneBottom" class="phone-bottom"></div><div class="mobile-home"></div></div></div></section>
+  <section id="gameStage" class="stage hidden"><div class="stage-top"><div id="stageLabel" class="stage-label"></div><div id="stageProgress" class="stage-progress"></div></div><div id="affinityHud" class="affinity-hud hidden"><div class="affinity-caption"><span>Affinité</span><b id="affinityValue">60</b></div><div class="affinity-track"><i id="affinityFill"></i></div></div><div id="guestGrid" class="guests hidden"></div><div id="seatRemark" class="seat-remark hidden" role="status" aria-live="polite"></div><div id="actorWrap" class="actor-wrap hidden"><div id="actorPhoto" class="actor-photo" role="img" aria-label="Votre rendez-vous"></div></div><div id="serverWrap" class="server-wrap hidden" aria-hidden="true"></div><div class="date-controls"><div id="dialogue" class="dialogue"></div><div class="phone-side"><button id="phonePeekBtn" class="phone-peek-btn hidden" aria-label="Téléphone posé sur la table"><span class="teaser-earpiece"></span><span class="teaser-screen" aria-hidden="true"></span></button></div></div></section><div id="phonePeek" class="phone-peek hidden"><div class="peek-phone-frame"><div class="peek-camera"></div><div class="peek-status"><span>21:04</span><span>●●● ▰</span></div><div class="peek-appbar"><img src="./assets/foxy-mascot.webp" alt=""><b>Foxy</b><span>♥</span></div><div id="peekHome" class="peek-home hidden"><div class="peek-home-clock">21:04<small>Mardi 20 octobre</small></div><button id="peekOpenFoxy" class="peek-home-app"><img src="./assets/foxy-mascot.webp" alt=""><small>Foxy</small></button></div><div id="peekProfile" class="peek-profile hidden"></div><div class="peek-distraction"><span id="peekTimer">0 s</span><button id="putPhoneAway" class="phone-primary">Ranger</button></div></div></div>
+  <div id="tableAuditOverlay" class="table-audit-overlay hidden" role="dialog" aria-modal="true" aria-label="Inspection des packs de tables"></div>
+  <div id="voiceOverlay" class="voice-confirm hidden"></div><div id="endOverlay" class="voice-confirm hidden"><div id="endCard" class="end-card"></div></div><div id="teleport" class="teleport"></div><div id="toast" class="toast"></div>
+</main>
+<script src="./data.js"></script><script src="./multiplayer.js"></script><script src="./app.js"></script>
+</body></html>
