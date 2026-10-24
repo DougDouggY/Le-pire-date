@@ -33,16 +33,15 @@ async function createPair(browser,mode,names=['Alex','Robin']){
   page.on('response',r=>{if(r.url().startsWith(baseURL)&&r.status()>=400)page.errors.push(`HTTP ${r.status()}: ${new URL(r.url()).pathname}`);});
  }
  await Promise.all(pages.map((page,role)=>open(page,names[role])));
- await pages[0].click('#mp-create');await pages[0].locator('.mp-code').waitFor();
+ await pages[0].click('.mp-close');await pages[0].click(({doubleDate:'#openMultiplayer',versus:'#openVersus',coach:'#openCoach'})[mode]);assert.equal(await pages[0].locator('#mp-player-name').count(),0);await pages[0].click('#mp-create');await pages[0].locator('.mp-code').waitFor();assert.equal(await pages[0].locator('[data-seat]').count(),0);assert.equal(await pages[0].locator('#mp-player-name').count(),0);
  const code=await pages[0].locator('.mp-code').textContent();
  await pages[1].fill('#mp-join-code',code);await pages[1].click('#mp-join');
  await pages[1].locator('#mp-ready').waitFor();
- await pages[0].locator('[data-player-role="1"]').filter({hasText:'Robin'}).waitFor();await pages[0].click('[data-player-role="1"]');assert.equal(await pages[0].locator('dialog[open] h2').textContent(),'Robin');await pages[0].click('#mp-profile-close');
- await pages[1].click(`[data-suggest-mode="${mode}"]`);
- await eventually(async()=>await pages[0].locator('.mp-suggestion').count()>0,'Mode suggestion was not shown to host');
- assert.equal((await view(pages[0])).mode,null,'Guest suggestion changed the selected mode');
- await pages[0].click(`[data-mode="${mode}"]`);
- await eventually(async()=>await pages[1].locator('#mp-ready').isEnabled(),'Guest never received selected mode');
+ await pages[0].locator('#mp-player-name').waitFor();
+ assert.equal(await pages[0].locator('.mp-forest-player').count(),2);
+ assert.match(await pages[0].locator('.fox-0').textContent(),/Joueur 1 · toi/);
+ assert.match(await pages[1].locator('.fox-1').textContent(),/Joueur 2 · toi/);
+ for(const [role,page] of pages.entries())await page.fill('#mp-player-name',names[role]);
  await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
  if(mode==='doubleDate')await prepareDoubleDate(pages);
  await Promise.all(pages.map(p=>p.locator('.mp-candidates').waitFor()));
@@ -58,10 +57,13 @@ async function prepareDoubleDate(pages){
  await eventually(async()=>(await view(pages[1])).foxy.profiles.length===1,'Compatible profile was not selected');
  const counterpart=(await view(pages[1])).foxy.profiles[0].id;
  await pages[1].locator(`#mp-like-profile[data-profile="${counterpart}"]`).waitFor();await pages[1].click('#mp-like-profile');
+ assert.equal((await view(pages[1])).stage,'foxy');
+ await pages[0].click('#mp-confirm-match');assert.equal((await view(pages[0])).stage,'foxy');await pages[1].click('#mp-confirm-match');
  await Promise.all(pages.map(p=>p.locator('[data-venue]').first().waitFor()));
  await pages[0].click('[data-venue="kebab"]');await pages[1].click('[data-venue="arcade"]');
  assert.equal((await view(pages[0])).stage,'venue','Disagreeing venue votes started the date');
  await pages[1].click('[data-venue="kebab"]');
+ assert.equal((await view(pages[1])).stage,'venue');await pages[0].click('#mp-confirm-venue');assert.equal((await view(pages[0])).stage,'venue');await pages[1].click('#mp-confirm-venue');
 }
 async function identify(pages,mode){
  if(mode==='coach'){
@@ -134,7 +136,7 @@ async function play(pages,mode,policy,{reconnect=false}={}){
     const hidden=await view(pages[1]);assert.equal(hidden.revealed,null);assert(!('picks'in hidden));
     assert(!JSON.stringify(hidden).includes('"effect"'));
     if(reconnect&&round===1){
-     await pages[0].reload();await pages[0].click('#openMultiplayer');
+     await pages[0].reload();await pages[0].click('#openMultiplayer');await pages[0].click('#mp-resume');
      await pages[0].locator('.mp-wait').filter({hasText:'Réponse envoyée'}).waitFor();
      assert.equal((await view(pages[0])).selected,true);
     }
@@ -151,7 +153,7 @@ async function play(pages,mode,policy,{reconnect=false}={}){
    return true;
   },'Resolved narrative reactions did not reach both clients');
   if(reconnect&&round===1){
-   await pages[1].reload();await pages[1].click('#openMultiplayer');await pages[1].locator('.mp-result').first().waitFor();
+   await pages[1].reload();await pages[1].click('#openMultiplayer');await pages[1].click('#mp-resume');await pages[1].locator('.mp-result').first().waitFor();
    const restored=await view(pages[1]);assert.equal(restored.me,1);assert(restored.round>s.round);
   }
   const next=await view(pages[0]);
@@ -185,12 +187,12 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
    if(mode==='versus'){assert.equal(ending.winner,policy==='win'?0:null);assert.match(ending.ending,policy==='win'?/joueur 1/:/rentrer seule/);}
    if(mode==='coach')assert.match(ending.ending,policy==='win'?/deuxième rendez-vous/:/remercie pour la soirée/);
    for(const page of pages){const local=await page.evaluate(()=>window.LP_CONTACTS.data());assert.equal(local.stats.games,1);assert.equal(Object.values(local.players)[0].stats.games,1);}
-   await pages[0].click('#mp-contacts');await pages[0].locator('#player-contact-list').waitFor();assert.equal(await pages[0].locator('[data-contact]').count(),1);if(policy==='win')assert.equal(await pages[0].locator('[data-date]').count(),1);await pages[0].click('#contactsBack');await pages[0].click('#openMultiplayer');await pages[0].locator('#mp-rematch').waitFor();assert.equal(await pages[0].evaluate(()=>window.LP_CONTACTS.data().stats.games),1);
+   await pages[0].click('#mp-contacts');await pages[0].locator('#player-contact-list').waitFor();assert.equal(await pages[0].locator('[data-contact]').count(),1);if(policy==='win')assert.equal(await pages[0].locator('[data-date]').count(),1);await pages[0].click('#contactsBack');await pages[0].click('#openMultiplayer');await pages[0].click('#mp-resume');await pages[0].locator('#mp-rematch').waitFor();assert.equal(await pages[0].evaluate(()=>window.LP_CONTACTS.data().stats.games),1);
    if(mode==='coach'&&policy==='win'){
     const previous=(await view(pages[1])).dossier.name;
     await pages[1].click('#mp-swap');assert.equal((await view(pages[1])).phase,'playing');await pages[0].click('#mp-swap');
     await Promise.all(pages.map(p=>p.locator('#mp-ready').waitFor()));
-    await eventually(async()=>await pages[1].locator('[data-mode]').count()===3,'Swapped host did not regain lobby controls');
+    await eventually(async()=>await pages[1].locator('#mp-difficulty').count()===1,'Swapped host did not regain lobby controls');
     await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
     await pages[0].locator('.mp-candidates').waitFor();await pages[1].locator('[data-seat]').first().waitFor();
     assert.notEqual((await view(pages[0])).dossier.name,previous);
@@ -210,7 +212,7 @@ test('solo success adds a date contact and keeps it after reloading the phone',{
  try{
   const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`${baseURL}/solo/index.html`);
-  assert.equal(await page.locator('.home-app').count(),4);
+  assert.equal(await page.locator('.home-app').count(),6);
   await page.locator('.phone-tools summary').click();await page.click('#openTestMode');await page.click('[data-id="zoe"]');
   await page.click('.guest-card[data-target="true"]');await page.locator('[data-choice]').first().waitFor();
   const slots=await page.evaluate(()=>window.DD_DATA.profiles.find(p=>p.id==='zoe').slots);
@@ -229,5 +231,19 @@ test('display names remain text in player profiles and the shared date roster',{
   const name='<svg onload=alert(1)>';
   const {pages}=await createPair(browser,'doubleDate',[name,'Robin']);await identify(pages,'doubleDate');
   for(const page of pages){assert.equal(await page.locator('#mp-content svg').count(),0);assert((await page.locator('#mp-content').textContent()).includes(name));assert.deepEqual(page.errors,[]);assert.deepEqual(page.dialogs,[]);}
+ }finally{await browser.close();}
+});
+
+test('Blind Foxy: both browsers observe the server timeout and affinity penalty',{timeout:120000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const {pages}=await createPair(browser,'coach');await identify(pages,'coach');
+  const before=await view(pages[0]);await pages[0].locator('[data-deadline]').waitFor();
+  assert.equal(before.dossier,undefined);assert((await view(pages[1])).dossier);
+  await delay(46000);
+  await eventually(async()=>{const after=await view(pages[0]);return after.round===before.round+1&&after.timeoutCount===1;},'Deadline did not advance the round');
+  await Promise.all(pages.map(p=>p.locator('.mp-result').filter({hasText:'−2 affinité'}).waitFor()));
+  const after=await view(pages[1]);assert.equal(after.timeoutCount,1);assert.equal(after.round,before.round+1);
+  for(const page of pages)assert.deepEqual(page.errors,[]);
  }finally{await browser.close();}
 });

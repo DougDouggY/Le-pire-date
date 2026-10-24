@@ -10,7 +10,7 @@ class MemoryD1 {
 const optionsOf=scene=>scene.options;
 const best=scene=>optionsOf(scene).toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
 const score=e=>Object.entries(e||{}).filter(([k])=>k!=='group').reduce((n,[,v])=>n+v,0)+(e?.group||0);
-async function createPair(mode,prepare=true){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});}return {db,host,guest};}
+async function createPair(mode,prepare=true){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});await act(db,host.code,token,{type:'confirmMatch'});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});await act(db,host.code,host.token,{type:'confirmVenue'});await act(db,host.code,guest.token,{type:'confirmVenue'});}return {db,host,guest};}
 async function identifyCorrect({db,host,guest},mode){const row=db.rows.get(host.code),room=JSON.parse(row.state_json),m=room.match;
  if(mode==='doubleDate'){
   for(let role=0;role<2;role++){const key=m.seats[role].find(x=>x.target).key;await act(db,host.code,role?guest.token:host.token,{type:'identify',key});}
@@ -224,10 +224,15 @@ test('Double Date keeps locations private and requires both likes and an agreed 
  assert.equal(publicState((await readRoom(db,host.code,host.token)).room,0).foxy.step,'waiting');
  await assert.rejects(()=>act(db,host.code,guest.token,{type:'likeProfile',profileId:CONTENT.doubleDate.pairs[0].profiles[1]}),/compatible/);
  await act(db,host.code,guest.token,{type:'likeProfile',profileId:pair.profiles[1]});
+ assert.equal((await readRoom(db,host.code,host.token)).room.match.stage,'foxy');
+ await assert.rejects(()=>act(db,host.code,host.token,{type:'venue',venueId:'kebab'}),/indisponible/);
+ await act(db,host.code,host.token,{type:'confirmMatch'});
+ assert.equal((await readRoom(db,host.code,host.token)).room.match.stage,'foxy');
+ await act(db,host.code,guest.token,{type:'confirmMatch'});
  await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});
  await act(db,host.code,guest.token,{type:'venue',venueId:'arcade'});
  assert.equal(publicState((await readRoom(db,host.code,host.token)).room,0).stage,'venue');
- await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});
+ await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});await act(db,host.code,host.token,{type:'confirmVenue'});await act(db,host.code,guest.token,{type:'confirmVenue'});
  room=(await readRoom(db,host.code,host.token)).room;
  assert.equal(room.match.venue.id,'kebab');assert.equal(room.match.kind,pair.id);
  assert.deepEqual(publicState(room,0).seats.map(s=>s.key),publicState(room,1).seats.map(s=>s.key));
@@ -249,4 +254,27 @@ test('guest suggestions do not choose the mode and one rematch vote cannot reset
  await act(match.db,match.host.code,match.host.token,{type:'continue'});
  const second=await act(match.db,match.host.code,match.guest.token,{type:'continue'});
  assert.equal(second.phase,'lobby');assert.deepEqual(second.ready,[false,false]);assert.equal(second.participants[0].stats.games,1);
+});
+
+
+test('Coach deadlines are authoritative, charge once and survive reconnects',async()=>{
+ const {db,host,guest}=await createPair('coach');await identifyCorrect({db,host,guest},'coach');
+ let row=db.rows.get(host.code),room=JSON.parse(row.state_json);assert(room.match.deadline>Date.now());
+ const firstRound=room.match.round;const initial=room.match.scores[0].connection;
+ room.match.deadline=Date.now()-1;row.state_json=JSON.stringify(room);
+ const [resumed,simultaneous]=await Promise.all([readRoom(db,host.code,guest.token),readRoom(db,host.code,host.token)]);assert.equal(simultaneous.room.match.timeoutCount,1);
+ assert.equal(resumed.room.match.round,firstRound+1);assert.equal(resumed.room.match.scores[0].connection,initial-2);
+ assert.equal(resumed.room.match.timeoutCount,1);
+ await act(db,host.code,host.token,{type:'timeout',round:firstRound+1,sceneId:'old'});
+ assert.equal((await readRoom(db,host.code,host.token)).room.match.timeoutCount,1);
+ assert.equal(publicState(resumed.room,0).dossier,undefined);
+ for(let i=0;i<8;i++){row=db.rows.get(host.code);room=JSON.parse(row.state_json);if(room.match.done)break;room.match.deadline=Date.now()-1;row.state_json=JSON.stringify(room);await readRoom(db,host.code,host.token);}
+ room=(await readRoom(db,host.code,host.token)).room;assert(room.match.done);assert.equal(room.match.winner,null);assert.equal(room.participants[0].stats.games,1);
+});
+
+test('players rename in preparation while retaining their local identity',async()=>{
+ const db=new MemoryD1(),host=await createRoom(db,'coach'),guest=await joinRoom(db,host.code);
+ const before=(await readRoom(db,host.code,host.token)).room.participants[1].id;
+ const renamed=await act(db,host.code,guest.token,{type:'rename',name:'Tony'});assert.equal(renamed.participants[1].name,'Tony');assert.equal(renamed.participants[1].id,before);
+ await act(db,host.code,guest.token,{type:'ready',value:true});await assert.rejects(()=>act(db,host.code,guest.token,{type:'rename',name:'Autre'}),/préparer/);
 });
