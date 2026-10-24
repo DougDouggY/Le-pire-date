@@ -3,17 +3,18 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const api=async(method,data)=>{const r=await fetch('/api/multiplayer',{method,headers:{'content-type':'application/json'},...(method==='GET'?{}:{body:JSON.stringify(data)})});const j=await r.json();if(!r.ok)throw Error(j.error||'Erreur réseau');return j;};
 let room=null,poll=null,state=null,lastHeartbeat=0;
 let generation=0, refreshing=false, sending=false;
+let lastChange=Date.now(), failures=0;
 function savedRoom(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;}}
 const root=document.createElement('div');root.id='mp-overlay';root.innerHTML=`<div class="mp-shell"><header class="mp-head"><span class="mp-kicker">FOXY · RENDEZ-VOUS EN LIGNE</span><button class="mp-close" aria-label="Fermer">×</button></header><main id="mp-content"></main></div>`;document.body.append(root);
 const style=document.createElement('style');style.textContent=`#mp-overlay{position:fixed;z-index:99999;inset:0;background:rgba(14,10,13,.92);backdrop-filter:blur(18px);display:none;overflow:auto;color:#f9f0ed;font-family:inherit}#mp-overlay.on{display:block}.mp-shell{width:min(900px,100%);min-height:100dvh;margin:auto;padding:clamp(16px,4vw,38px);box-sizing:border-box}.mp-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff25;padding-bottom:14px}.mp-kicker{letter-spacing:.16em;font-size:11px;color:#efb6ae}.mp-close{border:0;background:#ffffff18;color:white;border-radius:50%;width:38px;height:38px;font-size:25px;cursor:pointer}.mp-page{padding:22px 0}.mp-page h1{font-size:clamp(28px,5vw,48px);line-height:1.05;margin:8px 0 12px}.mp-page h2{margin:6px 0 10px}.mp-muted{color:#c9b9bb;line-height:1.5}.mp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:20px 0}.mp-card{background:#251b22;border:1px solid #ffffff1c;border-radius:18px;padding:17px}.mp-btn{border:0;border-radius:12px;padding:13px 16px;margin:5px 6px 5px 0;background:#f2b9ae;color:#26151b;font-weight:750;cursor:pointer}.mp-btn.secondary{background:#ffffff18;color:#fff;border:1px solid #ffffff24}.mp-btn:disabled{opacity:.45}.mp-input{background:#151115;color:white;border:1px solid #ffffff38;border-radius:11px;padding:12px;font:inherit;max-width:170px;text-transform:uppercase}.mp-code{font-size:30px;font-weight:850;letter-spacing:.22em;color:#ffd5c6}.mp-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:18px 0}.mp-mode{background:#281d25;border:1px solid #ffffff25;border-radius:15px;padding:16px;text-align:left;color:white;cursor:pointer}.mp-mode.selected{outline:2px solid #f2b9ae}.mp-people,.mp-candidates{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.mp-person{flex:1;min-width:160px;background:#241a20;border-radius:15px;padding:13px}.mp-photo{width:100%;max-height:270px;object-fit:cover;border-radius:14px}.mp-candidate{width:min(30%,180px);min-width:95px;background:#241a20;color:white;border:1px solid #ffffff30;border-radius:14px;padding:7px;cursor:pointer}.mp-candidate img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}.mp-candidate span{display:block;padding:7px 3px 3px;font-size:11px;color:#d0c1c3}.mp-scene{background:#261d24;border-radius:20px;padding:20px;margin:18px 0}.mp-question{font-size:21px;line-height:1.45}.mp-choice{display:block;width:100%;text-align:left;background:#382a34;color:white;border:1px solid #ffffff22;border-radius:13px;padding:14px;margin:9px 0;cursor:pointer;font:inherit}.mp-choice:hover{border-color:#f2b9ae}.mp-result{background:#18302a;border-radius:13px;padding:13px;margin:8px 0}.mp-chat{display:grid;grid-template-columns:1fr auto;gap:8px;margin:15px 0}.mp-chat input{width:100%;box-sizing:border-box;background:#171217;border:1px solid #ffffff30;border-radius:10px;color:white;padding:11px;font:inherit}.mp-messages{max-height:140px;overflow:auto;color:#e5d5d8;font-size:13px}.mp-error{color:#ffd1c7;background:#512d37;border-radius:10px;padding:10px;margin:12px 0}.mp-pills{display:flex;gap:8px;flex-wrap:wrap}.mp-pill{padding:7px 10px;border-radius:999px;background:#ffffff17;color:#e9d8da;font-size:12px}.mp-dossier details{background:#251b22;border-radius:12px;padding:12px;margin:8px 0}.mp-dossier summary{cursor:pointer;font-weight:bold}.mp-wait{padding:12px;color:#ffe0d4}.mp-footer{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px}@media(max-width:560px){.mp-page{padding-top:14px}.mp-grid{grid-template-columns:1fr}.mp-photo{max-height:220px}.mp-question{font-size:18px}}`;
 document.head.append(style);
-const content=()=>root.querySelector('#mp-content');const open=()=>{root.classList.add('on');if(room)showLobby();else home();};const close=()=>{root.classList.remove('on');clearInterval(poll);poll=null;generation++;};root.querySelector('.mp-close').onclick=close;
+const content=()=>root.querySelector('#mp-content');const open=()=>{root.classList.add('on');if(room)showLobby();else home();};const close=()=>{root.classList.remove('on');clearTimeout(poll);poll=null;generation++;};root.querySelector('.mp-close').onclick=close;
 function fail(e){const old=content().querySelector('.mp-error');if(old)old.remove();content().insertAdjacentHTML('afterbegin',`<div class="mp-error">${esc(e.message||e)}</div>`);}
 function home(){const saved=savedRoom('lpdate-mp-recovery');content().innerHTML=`<section class="mp-page"><p class="mp-kicker">TROIS FAÇONS DE RATER ENSEMBLE</p><h1>Le multijoueur</h1><p class="mp-muted">Enquête, mémoire et lecture des gens. Les salons sont privés et prévus pour deux joueurs.</p>${saved?`<article class="mp-card"><h2>Salon précédent · ${esc(saved.code)}</h2><p class="mp-muted">Tu peux reprendre ta place avec ton jeton enregistré sur cet appareil.</p><button class="mp-btn secondary" id="mp-resume">Reprendre le salon</button></article>`:''}<div class="mp-grid"><article class="mp-card"><h2>Créer un salon</h2><p class="mp-muted">Invite ton partenaire avec un code privé.</p><button class="mp-btn" id="mp-create">Créer un salon</button></article><article class="mp-card"><h2>Rejoindre</h2><p class="mp-muted">Saisis le code reçu.</p><input id="mp-join-code" class="mp-input" maxlength="8" placeholder="ABCD1234"><button class="mp-btn" id="mp-join">Rejoindre</button></article></div><p class="mp-muted">Les 12 premières enquêtes multijoueur sont écrites sur mesure. Chaque mode possède ses propres personnages.</p></section>`;
 content().querySelector('#mp-resume')?.addEventListener('click',()=>{room=saved;localStorage.setItem('lpdate-mp',JSON.stringify(room));showLobby();});
 content().querySelector('#mp-create').onclick=async()=>{try{const r=await api('POST',{type:'create'});enter(r);showLobby();}catch(e){fail(e);}};
 content().querySelector('#mp-join').onclick=async()=>{try{const code=content().querySelector('#mp-join-code').value.trim().toUpperCase();const r=await api('POST',{type:'join',code});enter(r);render(r.state);startPoll();}catch(e){fail(e);}};}
-function enter(r){generation++;lastHeartbeat=0;state=null;room={code:r.code,token:r.token,role:r.role};localStorage.setItem('lpdate-mp',JSON.stringify(room));}
+function enter(r){generation++;lastHeartbeat=Date.now();lastChange=Date.now();failures=0;state=null;room={code:r.code,token:r.token,role:r.role};localStorage.setItem('lpdate-mp',JSON.stringify(room));}
 function auth(){if(!room)throw Error('Rejoins ou crée un salon.');return {code:room.code,token:room.token};}
 async function send(action){
  if(sending)return;
@@ -22,7 +23,7 @@ async function send(action){
  content().querySelectorAll('button').forEach(b=>b.disabled=true);
  try{
   const s=await api('POST',{...auth(),action});
-  if(room===session&&generation===ticket)render(s);
+  if(room===session&&generation===ticket){lastHeartbeat=Date.now();lastChange=Date.now();failures=0;render(s);}
   return s;
  }catch(e){
   if(room===session&&generation===ticket){
@@ -30,22 +31,40 @@ async function send(action){
    try{const s=await getState();if(room===session&&generation===ticket)render(s);}catch{if(state)render(state);}
   }
   throw e;
- }finally{sending=false;}
+ }finally{sending=false;schedulePoll();}
 }
-async function getState(){const a=auth();if(Date.now()-lastHeartbeat>8000){await api('POST',{...a,action:{type:'heartbeat'}});lastHeartbeat=Date.now();}const r=await fetch(`/api/multiplayer?code=${encodeURIComponent(a.code)}`,{cache:'no-store',headers:{Authorization:`Bearer ${a.token}`}});const j=await r.json();if(!r.ok)throw Error(j.error);return j;}
+async function getState(){const a=auth();if(Date.now()-lastHeartbeat>=30000){const s=await api('POST',{...a,action:{type:'heartbeat'}});lastHeartbeat=Date.now();return s;}const r=await fetch(`/api/multiplayer?code=${encodeURIComponent(a.code)}`,{cache:'no-store',headers:{Authorization:`Bearer ${a.token}`}});const j=await r.json();if(!r.ok)throw Error(j.error);return j;}
 async function refresh(){
  if(refreshing||sending||!room)return;
  refreshing=true;
  const session=room,ticket=generation;
- try{const s=await getState();if(room===session&&generation===ticket&&JSON.stringify(s)!==JSON.stringify(state))render(s);}
- catch(e){if(room===session&&generation===ticket)fail(e);}
+ try{const s=await getState();if(room===session&&generation===ticket){failures=0;if(stateSignature(s)!==stateSignature(state)){lastChange=Date.now();render(s);}else state=s;}}
+ catch(e){if(room===session&&generation===ticket){failures++;fail(e);}}
  finally{refreshing=false;}
 }
-function startPoll(){clearInterval(poll);poll=setInterval(refresh,2200);}
-function showLobby(){startPoll();refresh();}
+// Heartbeats change `updated`, but are not gameplay activity: keep idle backoff.
+function stateSignature(s){if(!s)return '';const {updated,...visible}=s;void updated;return JSON.stringify(visible);}
+function pollDelay(){
+ if(failures)return Math.min(60000,5000*2**Math.min(failures,4));
+ const quiet=Date.now()-lastChange;
+ if(state?.ending||quiet>=120000)return 20000;
+ if(quiet>=30000||(state?.phase==='lobby'&&!state.players[1]))return 10000;
+ return 5000;
+}
+function schedulePoll(){
+ clearTimeout(poll);poll=null;
+ if(!room||document.hidden||!root.classList.contains('on'))return;
+ poll=setTimeout(async()=>{await refresh();schedulePoll();},pollDelay());
+}
+function startPoll(){schedulePoll();}
+function showLobby(){refresh().finally(schedulePoll);}
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){clearTimeout(poll);poll=null;}
+ else if(room&&root.classList.contains('on')){lastHeartbeat=0;showLobby();}
+});
 function modeName(m){return ({doubleDate:'Double Date',versus:'Date à 3',coach:'Le Coach'})[m]||m;}
 function renderLobby(s){const modes=[['doubleDate','DOUBLE DATE','À quatre, les deux binômes doivent trouver leur rythme.'],['versus','DATE À 3','Deux prétendants, des réponses secrètes, aucun gagnant garanti.'],['coach','LE COACH','Un rendez-vous à l’écran, un dossier côté coach, et une vraie enquête à deux.']];content().innerHTML=`<section class="mp-page"><p class="mp-kicker">SALON PRIVÉ</p><h1>Salon <span class="mp-code">${esc(room.code)}</span></h1><div class="mp-people"><div class="mp-person">Joueur 1 ${s.players[0]?'· connecté':'· …'} ${s.mode==='coach'?'· célibataire':''} ${s.ready[0]?'· prêt':''}</div><div class="mp-person">Joueur 2 ${s.players[1]?'· connecté':'· en attente'} ${s.mode==='coach'?'· coach':''} ${s.ready[1]?'· prêt':''}</div></div>${room.role===0?`<h2>Choisissez un mode</h2><div class="mp-modes">${modes.map(([id,title,desc])=>`<button class="mp-mode ${s.mode===id?'selected':''}" data-mode="${id}"><b>${title}</b><p class="mp-muted">${desc}</p></button>`).join('')}</div>`:`<p class="mp-wait">L’hôte choisit le mode. Prépare ton meilleur sens de l’observation.</p><h2>Mode : ${esc(modeName(s.mode)||'en attente')}</h2>`}${room.role===0?`<h2>Difficulté</h2><div class="mp-modes">${[['facile','Facile','Indices visuels affichés.'],['normal','Normal','Profil et observation, sans aide supplémentaire.'],['difficile','Difficile','Détails plus subtils, les indices restent déductibles.']].map(([id,title,desc])=>`<button class="mp-mode ${s.difficulty===id?'selected':''}" data-difficulty="${id}"><b>${title}</b><p class="mp-muted">${desc}</p></button>`).join('')}</div>`:''}<button class="mp-btn" id="mp-ready" ${!s.players[1]||!s.mode?'disabled':''}>${s.ready[room.role]?'Annuler ma disponibilité':'Je suis prêt'}</button><button class="mp-btn secondary" id="mp-copy">Copier le code</button><button class="mp-btn secondary" id="mp-switch-room">Changer de salon</button><p class="mp-muted">Les profils et réponses des autres rôles restent privés.</p></section>`;
-content().querySelectorAll('[data-mode]').forEach(b=>b.onclick=async()=>{try{await send({type:'mode',mode:b.dataset.mode});}catch(e){fail(e);}});content().querySelectorAll('[data-difficulty]').forEach(b=>b.onclick=async()=>{try{await send({type:'difficulty',value:b.dataset.difficulty});}catch(e){fail(e);}});content().querySelector('#mp-ready').onclick=async()=>{try{await send({type:'ready',value:!s.ready[room.role]});}catch(e){fail(e);}};content().querySelector('#mp-copy').onclick=()=>navigator.clipboard?.writeText(room.code);content().querySelector('#mp-switch-room').onclick=()=>{localStorage.setItem('lpdate-mp-recovery',JSON.stringify(room));localStorage.removeItem('lpdate-mp');room=null;state=null;generation++;clearInterval(poll);poll=null;home();};}
+content().querySelectorAll('[data-mode]').forEach(b=>b.onclick=async()=>{try{await send({type:'mode',mode:b.dataset.mode});}catch(e){fail(e);}});content().querySelectorAll('[data-difficulty]').forEach(b=>b.onclick=async()=>{try{await send({type:'difficulty',value:b.dataset.difficulty});}catch(e){fail(e);}});content().querySelector('#mp-ready').onclick=async()=>{try{await send({type:'ready',value:!s.ready[room.role]});}catch(e){fail(e);}};content().querySelector('#mp-copy').onclick=()=>navigator.clipboard?.writeText(room.code);content().querySelector('#mp-switch-room').onclick=()=>{localStorage.setItem('lpdate-mp-recovery',JSON.stringify(room));localStorage.removeItem('lpdate-mp');room=null;state=null;generation++;clearTimeout(poll);poll=null;home();};}
 function candidateHtml(s,clickable=true){return (s.seats||[]).map((x,i)=>`${clickable?`<button class="mp-candidate" data-seat="${esc(x.key)}">`:`<article class="mp-candidate">`}<img src="${esc(x.image)}" alt="Personne ${i+1}"><span>Personne ${i+1}</span>${x.cue?`<small>${esc(x.cue)}</small>`:''}${clickable?'</button>':'</article>'}`).join('');}
 function chatHtml(s){return `<div class="mp-card"><b>Parler à ton partenaire</b><div class="mp-messages">${(s.chat||[]).map(x=>`<p><b>${x.role===room.role?'Toi':`Joueur ${x.role+1}`} :</b> ${esc(x.text)}</p>`).join('')}</div><form class="mp-chat" id="mp-chat-form"><input id="mp-chat-text" maxlength="280" placeholder="Écris un indice ou une observation…"><button class="mp-btn">Envoyer</button></form></div>`;}
 function bindChat(){const form=content().querySelector('#mp-chat-form');if(form)form.onsubmit=async e=>{e.preventDefault();const i=content().querySelector('#mp-chat-text');if(!i.value.trim()||sending)return;try{await send({type:'chat',text:i.value});const next=content().querySelector('#mp-chat-text');if(next)next.value='';}catch(err){fail(err);}};}

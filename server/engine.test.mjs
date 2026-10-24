@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONTENT, NARRATIVE_BRANCHES, getProfile, getPair } from './content.mjs';
-import { act, createRoom, joinRoom, publicState, readRoom } from './engine.mjs';
+import { act, createRoom, joinRoom, publicState, readRoom, PRESENCE_TIMEOUT_MS } from './engine.mjs';
 
 class MemoryD1 {
   rows=new Map();
@@ -93,7 +93,7 @@ test('Date à 3 enforces individual turns and gives the observer no answer contr
 });
 
 test('presence changes to disconnected and a heartbeat restores the same player token',async()=>{
- const match=await createPair('coach');const row=match.db.rows.get(match.host.code);let room=JSON.parse(row.state_json);room.lastSeen=[Date.now()-30000,Date.now()-30000];row.state_json=JSON.stringify(room);let state=publicState(room,0);assert.deepEqual(state.players,[false,false]);state=await act(match.db,match.host.code,match.host.token,{type:'heartbeat'});assert.deepEqual(state.players,[true,false]);assert.equal((await readRoom(match.db,match.host.code,match.host.token)).role,0);
+ const match=await createPair('coach');const row=match.db.rows.get(match.host.code);let room=JSON.parse(row.state_json);room.lastSeen=[Date.now()-PRESENCE_TIMEOUT_MS-1000,Date.now()-PRESENCE_TIMEOUT_MS-1000];row.state_json=JSON.stringify(room);let state=publicState(room,0);assert.deepEqual(state.players,[false,false]);state=await act(match.db,match.host.code,match.host.token,{type:'heartbeat'});assert.deepEqual(state.players,[true,false]);assert.equal((await readRoom(match.db,match.host.code,match.host.token)).role,0);
 });
 
 async function simulateCoach(policy,profileId='coach-dounia',difficulty='normal'){
@@ -189,4 +189,19 @@ test('every Versus and Coach profile supports success and failure at all difficu
    assert.equal((await simulateCoach('fail',profile.id,difficulty)).winner,null);
   }
  }
+});
+
+
+test('heartbeats skip redundant writes and real actions refresh presence',async()=>{
+ const match=await createPair('coach'),row=match.db.rows.get(match.host.code);
+ const revision=row.revision;
+ await act(match.db,match.host.code,match.host.token,{type:'heartbeat'});
+ await act(match.db,match.host.code,match.host.token,{type:'heartbeat'});
+ assert.equal(row.revision,revision);
+ let room=JSON.parse(row.state_json);room.lastSeen[0]=Date.now()-31000;row.state_json=JSON.stringify(room);
+ await act(match.db,match.host.code,match.host.token,{type:'heartbeat'});assert.equal(row.revision,revision+1);
+ room=JSON.parse(row.state_json);room.lastSeen[0]=Date.now()-31000;row.state_json=JSON.stringify(room);
+ await act(match.db,match.host.code,match.host.token,{type:'chat',text:'Un indice'});
+ assert(Date.now()-JSON.parse(row.state_json).lastSeen[0]<1000);
+ assert.match(match.host.code,/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/);
 });

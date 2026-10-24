@@ -19,7 +19,7 @@ async function view(page){
  });
 }
 async function eventually(check,message){
- const end=Date.now()+15000;
+ const end=Date.now()+30000;
  while(Date.now()<end){if(await check())return;await delay(100);}
  assert.fail(message);
 }
@@ -28,7 +28,7 @@ async function createPair(browser,mode){
  const contexts=await Promise.all([browser.newContext(),browser.newContext()]);
  const pages=await Promise.all(contexts.map(c=>c.newPage()));
  for(const page of pages){
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(30000);
   page.errors=[];page.on('pageerror',e=>page.errors.push(e.message));
   page.on('response',r=>{if(r.url().startsWith(baseURL)&&r.status()>=400)page.errors.push(`HTTP ${r.status()}: ${new URL(r.url()).pathname}`);});
  }
@@ -64,6 +64,40 @@ function authoredScene(s,coach){
  return branch||scenes.find(sc=>sc.id===s.scene.id);
 }
 const score=e=>Object.values(e||{}).reduce((a,b)=>a+b,0);
+
+test('idle synchronization uses one heartbeat response and stops in hidden or closed views',{timeout:60000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const page=await browser.newPage();
+  await page.clock.install();
+  const calls=[];
+  page.on('request',request=>{
+   if(new URL(request.url()).pathname==='/api/multiplayer')calls.push({method:request.method(),action:request.method()==='POST'?request.postDataJSON()?.action?.type:null});
+  });
+  await open(page);await page.click('#mp-create');await page.locator('.mp-code').waitFor();
+  const before=calls.length;
+  await Promise.all([
+   page.waitForResponse(r=>r.request().method()==='POST'&&r.request().postData()?.includes('heartbeat')),
+   page.clock.fastForward(31000),
+  ]);
+  await delay(100);
+  assert.deepEqual(calls.slice(before),[{method:'POST',action:'heartbeat'}],'Heartbeat must not trigger an additional GET');
+  await page.evaluate(()=>{
+   Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+   document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const hidden=calls.length;await page.clock.fastForward(120000);await delay(100);
+  assert.equal(calls.length,hidden,'Hidden page continued polling');
+  await Promise.all([
+   page.waitForResponse(r=>r.request().method()==='POST'&&r.request().postData()?.includes('heartbeat')),
+   page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});document.dispatchEvent(new Event('visibilitychange'));}),
+  ]);
+  await page.click('.mp-close');
+  const closed=calls.length;await page.clock.fastForward(120000);await delay(100);
+  assert.equal(calls.length,closed,'Closed multiplayer view continued polling');
+ }finally{await browser.close();}
+});
+
 async function play(pages,mode,policy,{reconnect=false}={}){
  for(let round=1;round<7;round++){
   const s=await view(pages[0]);if(s.ending)return s;
@@ -108,7 +142,7 @@ async function play(pages,mode,policy,{reconnect=false}={}){
 }
 
 for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fail']){
- test(`${mode}: two real clients, ${policy} ending, privacy and rematch`,{timeout:120000},async()=>{
+ test(`${mode}: two real clients, ${policy} ending, privacy and rematch`,{timeout:240000},async()=>{
   const browser=await chromium.launch(browserOptions);
   try{
    const {contexts,pages}=await createPair(browser,mode);

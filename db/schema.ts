@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // Keep this definition aligned with the existing multiplayer migrations.
 export const multiplayerRooms = sqliteTable("multiplayer_rooms", {
@@ -10,4 +10,4 @@ export const multiplayerRooms = sqliteTable("multiplayer_rooms", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
   expiresAt: integer("expires_at").notNull(),
-});
+}, (table) => [index("multiplayer_rooms_expires_at_idx").on(table.expiresAt)]);
