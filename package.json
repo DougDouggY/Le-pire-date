@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "test:narrative": "node --test server/engine.test.mjs",
-    "validate:narrative": "node scripts/validate-content.mjs"
+    "validate:narrative": "node scripts/validate-content.mjs",
+    "test:multiplayer": "node --test tests/multiplayer.browser.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -54,6 +55,7 @@
     "eslint": "9.39.4",
     "eslint-config-next": "16.3.4",
     "json-rpc-2.0": "1.7.1",
+    "playwright-core": "1.57.0",
     "raw-body": "3.0.2",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
