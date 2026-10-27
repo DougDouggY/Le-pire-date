@@ -1,3 +1,5 @@
+import { installProfileDetails } from './profile-details.mjs';
+import { installPersonalContent } from './personal-content.mjs';
 const c = (id, text, reply, effect, memory = null) => ({ id, text, reply, effect, memory });
 const s = (id, prompt, options, extra = {}) => ({ id, prompt, options, ...extra });
 const face = (family, cue, hair = "lob", hairTone = "espresso", accessory = "none", jacket = "ink") => ({ family, cue, hair, hairTone, accessory, jacket });
@@ -130,13 +132,14 @@ export const NARRATIVE_BRANCHES = {
   ] }]
 };
 
+installPersonalContent(ddProfiles);
+installProfileDetails({doubleDate:{profiles:ddProfiles},versus:{profiles:vsProfiles},coach:{profiles:coachProfiles}});
+
 export const CONTENT = { doubleDate: { profiles: ddProfiles, pairs: ddPairs }, versus: { profiles: vsProfiles }, coach: { profiles: coachProfiles } };
 
 export function getProfile(mode, id) { return CONTENT[mode]?.profiles.find((profile) => profile.id === id) ?? null; }
 export function getPair(id) { return ddPairs.find((pair) => pair.id === id) ?? null; }
 export function publicProfile(profile, showVisualHint=false) {
-  return { name:profile.name, age:profile.age, job:profile.job, bio:profile.bio, interests:profile.interests, ...(showVisualHint?{faceHint:profile.face.cue}:{}) };
+  return { id:profile.id,photos:profile.media.photos,questions:profile.questions,name:profile.name, age:profile.age, job:profile.job, bio:profile.bio, interests:profile.interests, ...(showVisualHint?{faceHint:profile.face.cue}:{}) };
 }
-export function coachDossier(profile) {
-  return { name:profile.name, age:profile.age, job:profile.job, bio:profile.bio, face:profile.face, interests:profile.interests, habits:profile.habits, values:profile.values, sensitivities:profile.sensitivities, flaw:profile.flaw, history:profile.history, clues:profile.clues, anecdote:profile.anecdote, secret:profile.secret, scenes:profile.scenes.map(({ id, prompt }) => ({ id, prompt })) };
-}
+export function coachDossier(profile) {return publicProfile(profile);}

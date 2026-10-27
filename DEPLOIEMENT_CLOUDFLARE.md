@@ -196,3 +196,11 @@ Pour les mises à jour suivantes : `git pull --ff-only`, installation figée, te
 - [D1 : limites par base et par compte](https://developers.cloudflare.com/d1/platform/limits/)
 
 La documentation a été consultée via les fichiers officiels du dépôt [cloudflare/cloudflare-docs](https://github.com/cloudflare/cloudflare-docs/tree/production/src/content) lorsque l'accès direct au site documentaire était filtré. Les forfaits peuvent évoluer : revérifier ces pages et le tableau de bord avant publication.
+
+### Profils et conversations individuelles
+
+Les nouveaux salons Duo conservent des identifiants de profils et des réponses individuelles dans le JSON du salon ; aucune migration D1 supplémentaire n’est nécessaire. Les trois modes ont chacun quatre profils. Le catalogue possède 120 images de personnages et sosies, plus un premier plan de table ; les nouvelles images restent des Assets statiques et ne passent pas par le Worker API. La galerie utilise des contrôles locaux, sans requête de synchronisation additionnelle.
+
+Chaque question Duo produit deux réponses puis deux confirmations de lecture ; une partie de cinq questions ajoute dix actions de lecture. Versus attend également les deux lecteurs. Blind Foxy attend uniquement la lecture du joueur en rendez-vous, car le Coach n’accède jamais aux scènes, choix ou réactions. Son chronomètre ne tourne pas pendant la lecture. Les mutations utilisent toujours la même sauvegarde avec révision ; aucun service supplémentaire ou minuteur distant n’est créé. Les rythmes de polling et les quotas du compte restent ceux décrits ci-dessus.
+
+Le mapping des photos et sosies est exclusivement côté serveur (`server/media-manifest.mjs`). Les quatre images d’identification portent des noms opaques ; l’API filtre les champs `target` et `kind`. Le Coach ne reçoit pas ces images. Le célibataire ne reçoit ni les galeries ni les réponses du profil privé. Les profils publics ne contiennent pas les effets, valeurs cachées ou scènes futures.
