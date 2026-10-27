@@ -89,3 +89,5 @@ Le schéma `db/schema.ts` décrit `multiplayer_rooms`. La migration supplémenta
 Les salons expirent après 12 heures. La reprise d’un ancien salon indisponible ramène automatiquement à Créer/Rejoindre et arrête la synchronisation ; seuls les jetons de ce salon sont retirés du navigateur, jamais les contacts ni les statistiques.
 
 Pour vérifier toutes les images des profils : `node scripts/audit-profile-assets.mjs`. Les images statiques sont servies directement par Assets ; naviguer dans une galerie ne produit aucune action API. Les nouveaux parcours nécessitent un **nouveau salon** ; les parties déjà lancées conservent leur scénario précédent.
+
+Les nouveaux rendez-vous commencent par la commande d’accueil, puis suivent un fil propre au personnage avec une transition entre chaque sujet : six étapes en Duo/Blind Foxy et cinq en Versus. La hauteur du personnage s’adapte au texte pour garder la question et les trois réponses visibles ensemble sur ordinateur et téléphone.

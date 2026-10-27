@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONTENT, NARRATIVE_BRANCHES, getProfile, getPair } from './content.mjs';
-import { act, createRoom, joinRoom, publicState, readRoom, PRESENCE_TIMEOUT_MS } from './engine.mjs';
+import { act, createRoom, joinRoom, publicState, readRoom, PRESENCE_TIMEOUT_MS, scenesFor } from './engine.mjs';
 
 class MemoryD1 {
   rows=new Map();
@@ -11,7 +11,7 @@ const optionsOf=scene=>scene.options;
 const best=scene=>optionsOf(scene).toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
 const score=e=>Object.entries(e||{}).filter(([k])=>k!=='group').reduce((n,[,v])=>n+v,0)+(e?.group||0);
 // Existing simulations exercise persisted legacy rooms; modern flow is tested below.
-async function createPair(mode,prepare=true,modern=false,chooseVenue=true){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(mode==='coach'&&chooseVenue){const m=JSON.parse(db.rows.get(host.code).state_json).match;await act(db,host.code,host.token,{type:'chooseVenue',venueId:getProfile(mode,m.profileId).venuePreference});}if(!modern){const row=db.rows.get(host.code),saved=JSON.parse(row.state_json);saved.match.presentation=1;saved.match.personal=false;row.state_json=JSON.stringify(saved); }if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});await act(db,host.code,token,{type:'confirmMatch'});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});await act(db,host.code,host.token,{type:'confirmVenue'});await act(db,host.code,guest.token,{type:'confirmVenue'});}return {db,host,guest};}
+async function createPair(mode,prepare=true,modern=false,chooseVenue=true){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(mode==='coach'&&chooseVenue){const m=JSON.parse(db.rows.get(host.code).state_json).match;await act(db,host.code,host.token,{type:'chooseVenue',venueId:getProfile(mode,m.profileId).venuePreference});}if(!modern){const row=db.rows.get(host.code),saved=JSON.parse(row.state_json);saved.match.presentation=1;saved.match.personal=false;saved.match.conversation=0;row.state_json=JSON.stringify(saved); }if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});await act(db,host.code,token,{type:'confirmMatch'});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});await act(db,host.code,host.token,{type:'confirmVenue'});await act(db,host.code,guest.token,{type:'confirmVenue'});}return {db,host,guest};}
 async function identifyCorrect({db,host,guest},mode){const row=db.rows.get(host.code),room=JSON.parse(row.state_json),m=room.match;
  if(mode==='doubleDate'){
   for(let role=0;role<2;role++){const key=m.seats[role].find(x=>x.target).key;await act(db,host.code,role?guest.token:host.token,{type:'identify',key});}
@@ -316,9 +316,9 @@ test('all personal Duo routes can win or fail; private dialogue and both reading
  const profiles=CONTENT.doubleDate.profiles;
  for(const [index,p] of profiles.entries())for(const policy of ['win','fail']){
   const ids=[p.id,profiles[(index+3)%profiles.length].id],match=await modernDuo(ids),{db,host,guest}=match;
-  for(let round=0;round<5;round++){
+  for(let round=0;round<6;round++){
    const before=(await readRoom(db,host.code,host.token)).room;const h=publicState(before,0),g=publicState(before,1);assert.notEqual(h.scene.id,g.scene.id);assert.notEqual(h.scene.prompt,g.scene.prompt);
-   const choose=role=>{const sc=getProfile('doubleDate',ids[role]).duoScenes[round];const options=sc.options.toSorted((a,b)=>score(b.effect)-score(a.effect));return policy==='win'?options[0]:options.at(-1);};
+   const choose=role=>{const sc=scenesFor(before.match,role)[round];const options=sc.options.toSorted((a,b)=>score(b.effect)-score(a.effect));return policy==='win'?options[0]:options.at(-1);};
    const own=choose(0);await act(db,host.code,host.token,{type:'answer',option:own.id,round:round+1,sceneId:h.scene.id});
    let current=(await readRoom(db,host.code,host.token)).room;assert.equal(publicState(current,0).lastReveal[0].reply,own.reply);assert.deepEqual(publicState(current,1).lastReveal,[]);
    await act(db,host.code,host.token,{type:'nextScene',sceneId:h.scene.id});assert.equal((await readRoom(db,host.code,host.token)).room.match.round,round);
@@ -355,9 +355,9 @@ test('modern Versus keeps simultaneous picks secret and requires both readers be
 test('all four communication-only Coach routes finish with correct turn numbers and private profiles',async()=>{
  for(const p of CONTENT.coach.profiles)for(const policy of ['win','fail']){
   const match=await createPair('coach',false,true),{db,host}=match;const row=db.rows.get(host.code);let room=JSON.parse(row.state_json);room.match.profileId=p.id;room.match.seats=room.match.seats.map((seat,i)=>({...seat,target:i===0}));row.state_json=JSON.stringify(room);await identifyCorrect(match,'coach');
-  for(let i=0;i<p.communicationScenes.length;i++){
-   room=(await readRoom(db,host.code,host.token)).room;const view=publicState(room,0),guide=publicState(room,1);assert.equal(view.total,5);assert.equal(view.round,i+1);assert.equal(guide.scene,null);assert.deepEqual(guide.lastReveal,[]);assert.equal(guide.reaction,null);assert.equal(guide.dossier.values,undefined);assert.equal(guide.dossier.clues,undefined);
-   const active=Object.values(NARRATIVE_BRANCHES).flat().find(b=>b.prompt===view.scene.prompt)||p.communicationScenes[i];const options=active.options.toSorted((a,b)=>score(b.effect)-score(a.effect));const result=await act(db,host.code,host.token,{type:'answer',round:view.round,sceneId:view.scene.id,option:(policy==='win'?options[0]:options.at(-1)).id});assert(result.reaction);assert.equal(result.deadline,null);
+  for(let i=0;i<p.communicationScenes.length+1;i++){
+   room=(await readRoom(db,host.code,host.token)).room;const view=publicState(room,0),guide=publicState(room,1);assert.equal(view.total,6);assert.equal(view.round,i+1);assert.equal(guide.scene,null);assert.deepEqual(guide.lastReveal,[]);assert.equal(guide.reaction,null);assert.equal(guide.dossier.values,undefined);assert.equal(guide.dossier.clues,undefined);
+   const active=Object.values(NARRATIVE_BRANCHES).flat().find(b=>b.prompt===view.scene.prompt)||scenesFor(room.match)[i];const options=active.options.toSorted((a,b)=>score(b.effect)-score(a.effect));const result=await act(db,host.code,host.token,{type:'answer',round:view.round,sceneId:view.scene.id,option:(policy==='win'?options[0]:options.at(-1)).id});assert(result.reaction);assert.equal(result.deadline,null);
    await act(db,host.code,host.token,{type:'nextScene',reactionId:result.reaction.id});
   }
   room=(await readRoom(db,host.code,host.token)).room;assert(room.match.done);assert.equal(room.match.winner,policy==='win'?0:null);assert.equal(room.participants[0].stats.games,1);

@@ -36,7 +36,7 @@ Le Coach consulte uniquement le profil smartphone, avant et pendant le rendez-vo
 
 Le célibataire voit quatre candidates sans le profil privé. Après son choix, il voit le rendez-vous dans le lieu, les expressions de sa partenaire et ses choix de dialogue. Une mauvaise reconnaissance reste rattrapable mais coûte du respect. Le chrono de 45 secondes est côté serveur ; il s’arrête pendant la lecture d’une réaction. Seul le célibataire poursuit le dialogue. Le résultat et les votes de revanche restent communs.
 
-Les cinq scènes de chaque route reprennent une histoire, la développent et reviennent sur un détail. Le contexte prime sur un mot-clé de profil : Dounia peut aimer les desserts tout en venant de préciser qu’elle n’a plus faim. Les autres informations anecdotiques peuvent ne jamais servir.
+Les scènes de chaque route reprennent une histoire, la développent et reviennent sur un détail. Le contexte prime sur un mot-clé de profil : Dounia peut aimer les desserts tout en venant de préciser qu’elle n’a plus faim. Les autres informations anecdotiques peuvent ne jamais servir.
 
 ## Foxy Duo et Versus
 
@@ -67,3 +67,20 @@ le lieu choisi même s’il est inadapté, applique sa conséquence une seule fo
 compose une remarque d’arrivée propre à la personne et au lieu. Une confusion
 avec un sosie produit aussi une réplique, avant la première question. Les salons
 anciens déjà commencés continuent leur parcours sans être réinitialisés.
+
+
+## Conversations reliées et lecture sans défilement
+
+Les nouveaux salons ont six étapes en Duo et Blind Foxy, cinq en Versus. La première
+est une commande de boissons, écrite pour chaque personnage et adaptée au lieu.
+`server/conversation.mjs` ajoute ensuite une transition spécifique devant chaque
+scène d’origine. Les options, effets et identifiants des scènes existantes sont
+conservés, ainsi que leurs embranchements ; certaines formulations qui supposaient
+un choix jamais effectué ont été corrigées. Le champ `conversation` du salon
+réserve ce parcours aux nouvelles parties, sans décaler les anciens salons.
+
+Le texte des questions et réponses est plus compact. Le personnage occupe la
+hauteur restante après mesure du panneau de décision, pour garder tous les choix
+visibles ensemble. La scène ne masque ni ne tronque de réponse. Les tests couvrent
+les textes des douze profils, les branches et les remarques d’arrivée, sur écran
+1280 × 720 et téléphones 390 × 844 et 360 × 640, en plus des parties à deux clients.

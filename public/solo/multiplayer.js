@@ -170,7 +170,7 @@ let scene=`<div class="mp-scene" data-round="${s.round}"><p class="mp-kicker">${
 if(s.reaction){scene+=`${revealHtml(s)}<button class="mp-btn mp-next" id="mp-next-scene" ${s.reaction.ready?'disabled':''}>${s.reaction.ready?'Prêt · on attend ton ami…':'Continuer →'}</button><p class="mp-muted">${s.mode==='coach'?'Prends le temps de lire sa réaction avant de poursuivre.':'Vous passez à la suite lorsque vous avez tous les deux fini de lire.'}</p>`;}
 else{
  if(s.arrivalNotice)scene+=`<p class="mp-notice">${esc(s.arrivalNotice)}</p>`;
- scene+=`<p class="mp-question">${esc(s.scene?.prompt||'Le rendez-vous reprend…')}</p>`;
+ scene+=`${s.scene?.transition?`<p class="mp-transition">${esc(s.scene.transition)}</p>`:''}<p class="mp-question">${esc(s.scene?.prompt||'Le rendez-vous reprend…')}</p>`;
  if(s.mode==='versus'&&s.scene?.turn)scene+=`<span class="mp-pill">${esc(s.scene.turn==='simultaneous'?'Vous répondez tous les deux en secret.':`${playerName(s,Number(s.scene.turn.slice(-1)))} répond ; l’autre écoute.`)}</span>`;
  if(isCoach)scene+=`<p class="mp-coach-guide">Aide ton ami à faire le lien avec son profil. Parlez sur Discord ; c’est lui qui choisit sa réponse.</p>`;
  else if(s.selected)scene+=`<p class="mp-wait">Réponse envoyée. Attends l’autre joueur…</p>`;
@@ -180,7 +180,15 @@ else{
 }
 scene+='</div>';
 content().innerHTML=`<section class="mp-page mp-live-date"><div class="mp-date-top"><span>${esc(s.venue?.name||'LE RESTAURANT')}</span><small>${esc(playerName(s,s.me))}${isCoach?' · Coach':''}</small></div>${s.sharedMoment?`<p class="mp-shared-moment">${esc(s.sharedMoment)}</p>`:''}${dateActors(s)}<div class="mp-conversation">${scene}</div>${isCoach?`<aside class="mp-coach-phone"><h2>Son profil Foxy</h2>${profileReference(s)}</aside>`:s.mode==='doubleDate'?`<details class="mp-pocket-profile"><summary>Mon téléphone · revoir son profil</summary>${profileReference(s)}</details>`:''}<details class="mp-chat-pocket"><summary>Parler à ${esc(playerName(s,1-s.me))}</summary>${chatHtml(s)}</details></section>`;
-bindPlay(s);animateActor(s);}
+bindPlay(s);animateActor(s);requestAnimationFrame(fitDate);}
+// Keep the entire decision above the fold. Extra profile/chat tools stay below.
+function fitDate(){
+ const stage=content().querySelector('.mp-restaurant-scene'),dialogue=content().querySelector('.mp-conversation');if(!stage||!dialogue)return;
+ const top=stage.getBoundingClientRect().top-root.getBoundingClientRect().top+root.scrollTop;
+ const available=root.clientHeight-top-dialogue.getBoundingClientRect().height-12;
+ stage.style.height=`${Math.max(64,Math.min(root.clientHeight*.33,available))}px`;
+}
+window.addEventListener('resize',()=>requestAnimationFrame(fitDate));
 const actorReactions=new Map();let actorTimer;
 function animateActor(s){
  clearTimeout(actorTimer);const image=content().querySelector('[data-actor-image]'),actor=s.actor;

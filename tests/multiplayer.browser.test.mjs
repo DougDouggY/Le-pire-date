@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
+import { arrivalFor } from '../server/date-presentation.mjs';
+import { conversationScenes } from '../server/conversation.mjs';
 import { CONTENT, NARRATIVE_BRANCHES } from '../server/content.mjs';
 
 // Run against the real application and its migrated local D1, never a mock API.
@@ -25,7 +27,7 @@ async function eventually(check,message){
 }
 async function open(page,name='Camille'){await page.goto(`${baseURL}/solo/index.html`);await page.click('#openMultiplayer');if(await page.locator('#mp-player-name').count())await page.fill('#mp-player-name',name);}
 async function createPair(browser,mode,names=['Alex','Robin'],venueChoice='preferred'){
- const contexts=await Promise.all([browser.newContext(),browser.newContext()]);
+ const contexts=await Promise.all([browser.newContext({viewport:{width:390,height:844}}),browser.newContext({viewport:{width:1280,height:720}})]);
  const pages=await Promise.all(contexts.map(c=>c.newPage()));
  for(const page of pages){
   page.setDefaultTimeout(30000);
@@ -82,8 +84,9 @@ async function identify(pages,mode){
  await pages[0].locator('.mp-scene').waitFor();if(mode!=='coach')await pages[1].locator('.mp-scene').waitFor();
 }
 function authoredScene(s,coach){
- const scenes=s.mode==='doubleDate'?CONTENT.doubleDate.profiles.find(p=>p.name===s.profiles.find(p=>p.mine).name).duoScenes:
-  (()=>{const p=CONTENT[s.mode].profiles.find(p=>p.name===(s.profile?.name||coach.dossier.name));return s.mode==='coach'?p.communicationScenes:p.stories||p.scenes;})();
+ const p=s.mode==='doubleDate'?CONTENT.doubleDate.profiles.find(p=>p.name===s.profiles.find(p=>p.mine).name):CONTENT[s.mode].profiles.find(p=>p.name===(s.profile?.name||coach.dossier.name));
+ const original=s.mode==='doubleDate'?p.duoScenes:s.mode==='coach'?p.communicationScenes:p.stories;
+ const scenes=conversationScenes(p,original,s.venue?.id);
  const branch=Object.values(NARRATIVE_BRANCHES).flat().find(b=>b.prompt===s.scene.prompt);
  return branch||scenes.find(sc=>sc.id===s.scene.id);
 }
@@ -122,6 +125,12 @@ test('idle synchronization uses one heartbeat response and stops in hidden or cl
  }finally{await browser.close();}
 });
 
+async function choicesFit(page){
+ await page.evaluate(()=>new Promise(requestAnimationFrame));
+ const box=await page.evaluate(()=>{const choices=[...document.querySelectorAll('[data-option]')];return {height:innerHeight,overflow:document.querySelector('#mp-overlay').scrollWidth>innerWidth,choices:choices.map(el=>({top:el.getBoundingClientRect().top,bottom:el.getBoundingClientRect().bottom,font:parseFloat(getComputedStyle(el).fontSize)}))};});
+ assert.equal(box.overflow,false);assert(box.choices.length>0);
+ for(const choice of box.choices){assert(choice.top>=0);assert(choice.bottom<=box.height,`Choice ends at ${choice.bottom} beyond ${box.height}px viewport`);assert(choice.font>=13);}
+}
 async function play(pages,mode,policy,{reconnect=false}={}){
  for(let round=1;round<7;round++){
   const initial=await view(pages[0]);if(initial.ending)return initial;
@@ -131,7 +140,7 @@ async function play(pages,mode,policy,{reconnect=false}={}){
    const current=await view(pages[role]),scene=authoredScene(current,coach);
    const ordered=scene.options.toSorted((a,b)=>score(b.effect)-score(a.effect));const fail=policy==='fail'||(mode==='versus'&&role===1);const option=fail?ordered.at(-1):ordered[0];
    if(mode==='versus'&&initial.scene.turn!=='simultaneous')assert.equal(await pages[1-role].locator('[data-option]').count(),0);
-   await pages[role].locator(`[data-option="${option.id}"]`).click();
+   await pages[role].locator(`[data-option="${option.id}"]`).waitFor();await choicesFit(pages[role]);await pages[role].locator(`[data-option="${option.id}"]`).click();
    if(mode==='doubleDate'){await pages[role].locator('.mp-spoken-reply').filter({hasText:option.reply}).waitFor();assert.equal((await view(pages[1-role])).lastReveal.length,role===0?0:1);}
    else if(roles.length===2&&role===0)await pages[0].locator('.mp-wait').waitFor();
    if(roles.length===2&&role===0){const hidden=await view(pages[1]);assert(!('picks'in hidden));assert(!JSON.stringify(hidden).includes('"effect"'));}
@@ -141,7 +150,7 @@ async function play(pages,mode,policy,{reconnect=false}={}){
    }
   }
   const readers=mode==='coach'?[pages[0]]:pages;await Promise.all(readers.map(p=>p.locator('#mp-next-scene').waitFor()));
-  for(const page of readers){const s=await view(page);assert(s.reaction);await eventually(async()=>{const rendered=await page.locator('.mp-result').allTextContents();return s.lastReveal.every(x=>rendered.some(text=>text.includes(x.text)&&text.includes(x.reply)));},'The complete chosen reply did not render');assert(await page.locator('.mp-spoken-reply').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=26));}
+  for(const page of readers){const s=await view(page);assert(s.reaction);await eventually(async()=>{const rendered=await page.locator('.mp-result').allTextContents();return s.lastReveal.every(x=>rendered.some(text=>text.includes(x.text)&&text.includes(x.reply)));},'The complete chosen reply did not render');assert(await page.locator('.mp-spoken-reply').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=18));}
   if(reconnect&&round===1){await pages[1].reload();await pages[1].click('#openMultiplayer');await pages[1].click('#mp-resume');await pages[1].locator(mode==='coach'?'.mp-reference-phone':'#mp-next-scene').waitFor();assert.equal((await view(pages[1])).me,1);}
   await pages[0].click('#mp-next-scene');if(mode!=='coach'){assert((await view(pages[0])).reaction,'One reader skipped the reaction for both');await pages[1].click('#mp-next-scene');}else{const guide=await view(pages[1]);assert.equal(guide.scene,null);assert.deepEqual(guide.lastReveal,[]);assert.equal(await pages[1].locator('[data-option],.mp-spoken-reply').count(),0);}
   await eventually(async()=>{const next=await view(pages[0]);return !next.reaction;},'Both readers did not resume the date');
@@ -240,7 +249,7 @@ for(const [button,mode] of [['openMultiplayer','doubleDate'],['openVersus','vers
  test(`${mode}: unavailable saved room recovers without losing contacts and a new invitation works`,{timeout:60000},async()=>{
   const browser=await chromium.launch(browserOptions);
   try{
-   const contexts=await Promise.all([browser.newContext(),browser.newContext()]);const pages=await Promise.all(contexts.map(c=>c.newPage()));const [host,guest]=pages;
+   const contexts=await Promise.all([browser.newContext({viewport:{width:390,height:844}}),browser.newContext({viewport:{width:1280,height:720}})]);const pages=await Promise.all(contexts.map(c=>c.newPage()));const [host,guest]=pages;
    await host.goto(`${baseURL}/solo/`);assert.equal(await host.locator('#openVersus span').textContent(),'Foxy Versus');assert(await host.locator('.foxy-mode-icon').evaluateAll(images=>images.every(i=>i.complete&&i.naturalWidth>0)));
    const snapshot=await host.evaluate(()=>{window.LP_CONTACTS.player('Camille');const snapshot=localStorage.getItem('lpdate.contacts.v1');const room={code:'PASTROOM',token:crypto.randomUUID()+crypto.randomUUID(),role:0};localStorage.setItem('lpdate-mp',JSON.stringify(room));localStorage.setItem('lpdate-mp-recovery',JSON.stringify(room));return snapshot;});
    await host.reload();const calls=[];host.on('request',r=>{if(new URL(r.url()).pathname==='/api/multiplayer')calls.push(r.method());});
@@ -263,7 +272,7 @@ for(const [button,mode] of [['openMultiplayer','doubleDate'],['openVersus','vers
 test('a room lost while setting a nickname returns to an enabled invitation screen',{timeout:60000},async()=>{
  const browser=await chromium.launch(browserOptions);
  try{
-  const contexts=await Promise.all([browser.newContext(),browser.newContext()]);const [host,guest]=await Promise.all(contexts.map(c=>c.newPage()));
+  const contexts=await Promise.all([browser.newContext({viewport:{width:390,height:844}}),browser.newContext({viewport:{width:1280,height:720}})]);const [host,guest]=await Promise.all(contexts.map(c=>c.newPage()));
   await open(host);await host.click('#mp-create');await host.locator('.mp-code').waitFor();const code=await host.locator('.mp-code').textContent();
   await open(guest);await guest.fill('#mp-join-code',code);await guest.click('#mp-join');await host.locator('#mp-ready').waitFor();await host.fill('#mp-player-name','Camille');
   // Inject a server-side disappearance between the displayed lobby and Ready.
@@ -296,7 +305,7 @@ test('Blind Foxy: an unsuitable venue stays selected; the two-second reaction re
  const browser=await chromium.launch(browserOptions);
  try{
   const {pages}=await createPair(browser,'coach',['Alex','Robin'],'wrong');await identify(pages,'coach');
-  const initial=await view(pages[0]);assert(initial.arrivalNotice);assert.equal(initial.actor.mood,'displeased');assert.equal(initial.scores,undefined);
+  const initial=await view(pages[0]);await choicesFit(pages[0]);assert(initial.arrivalNotice);assert.equal(initial.actor.mood,'displeased');assert.equal(initial.scores,undefined);
   await pages[0].locator('.mp-notice').waitFor();assert(!/affinité|points de respect/.test(await pages[0].locator('.mp-notice').textContent()));
   const guide=await view(pages[1]);const authored=authoredScene(initial,guide),option=authored.options.toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
   await pages[0].click(`[data-option="${option.id}"]`);await pages[0].locator('.mp-spoken-reply').waitFor();
@@ -310,5 +319,33 @@ test('Blind Foxy: an unsuitable venue stays selected; the two-second reaction re
   const layout=await pages[0].evaluate(()=>({actor:document.querySelector('.mp-restaurant-scene').getBoundingClientRect().bottom,dialogue:document.querySelector('.mp-conversation').getBoundingClientRect().top,overflow:document.querySelector('#mp-overlay').scrollWidth>innerWidth}));
   assert(layout.dialogue>=layout.actor-2);assert.equal(layout.overflow,false);
   for(const page of pages)assert.deepEqual(page.errors,[]);
+ }finally{await browser.close();}
+});
+
+
+test('all profile questions and three choices fit together across desktop and phone sizes',{timeout:90000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const {pages}=await createPair(browser,'doubleDate');await identify(pages,'doubleDate');const page=pages[0];
+  // Keep the real rendered game and its styles; stop polling while measuring
+  // the complete authored text catalogue, including the longest branch prompts.
+  await page.click('.mp-close');await page.evaluate(()=>document.querySelector('#mp-overlay').classList.add('on'));
+  const fixtures=[];
+  for(const [mode,pool]of Object.entries(CONTENT))for(const p of pool.profiles){
+   const route=conversationScenes(p,p.duoScenes||p.communicationScenes||p.stories,'kebab');fixtures.push(...route);if(mode==='coach')fixtures.push({...route[0],arrivalNotice:arrivalFor(p,'kebab',true)});
+   for(const [key,branches]of Object.entries(NARRATIVE_BRANCHES))if(key.startsWith(p.id+':'))fixtures.push(...branches.map(b=>({...b,transition:'La conversation revient sur ce qui a été dit un peu plus tôt.'})));
+  }
+  for(const viewport of [{width:1280,height:720},{width:390,height:844},{width:360,height:640}]){
+   await page.setViewportSize(viewport);
+   for(const fixture of fixtures){
+    await page.evaluate(scene=>{const box=document.querySelector('.mp-scene');box.replaceChildren();const title=document.createElement('p');title.className='mp-kicker';title.textContent='Foxy · 1/6';box.append(title);if(scene.arrivalNotice){const notice=document.createElement('p');notice.className='mp-notice';notice.textContent=scene.arrivalNotice;box.append(notice);}
+     const transition=document.createElement('p');transition.className='mp-transition';transition.textContent=scene.transition||'';box.append(transition);
+     const question=document.createElement('p');question.className='mp-question';question.textContent=scene.prompt;box.append(question);
+     for(const option of scene.options){const button=document.createElement('button');button.className='mp-choice';button.dataset.option=option.id;button.textContent=option.text;box.append(button);}
+     const timer=document.createElement('p');timer.className='mp-timer';timer.textContent='45 s pour répondre';box.append(timer);document.querySelector('#mp-overlay').scrollTop=0;dispatchEvent(new Event('resize'));
+    },fixture);
+    await choicesFit(page);
+   }
+  }
  }finally{await browser.close();}
 });
