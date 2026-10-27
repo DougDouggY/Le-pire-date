@@ -26,6 +26,8 @@ Les nouvelles étapes sont enregistrées dans le JSON du salon, avec une écritu
 
 La bibliothèque active contient **quatre profils distincts par mode**, soit douze identités. Chaque profil possède quatre photos de la même personne, trois petites questions, trois expressions de rendez-vous et ses propres deux sosies crédibles plus un leurre absurde. Les routes Duo sont dans `server/personal-content.mjs`, les profils enrichis et les routes de communication Coach dans `server/profile-details.mjs`. Les scénarios de table précédents et leurs embranchements sont conservés pour les anciens salons. Voir [PROFILS_MULTIPLAYER.md](PROFILS_MULTIPLAYER.md) pour le catalogue et les règles de confidentialité.
 
+Dans les nouvelles parties **Blind Foxy**, le Coach conseille le lieu à partir de la bio ; le célibataire choisit l’adresse. Le rendez-vous s’y déroule même si elle est mal adaptée, avec une réplique à l’arrivée, comme en cas de confusion avec un sosie. Les trois modes utilisent six sprites détourés par personnage et un vrai décor, avec les dialogues et choix sous la scène. Après chaque réponse, une réaction de deux secondes revient à l’humeur cumulée. Les pénalités chiffrées restent internes.
+
 ## Architecture
 
 - Le jeu solo original est conservé sous `public/solo/`; le menu d’accueil ouvre le multijoueur dans une fenêtre superposée.

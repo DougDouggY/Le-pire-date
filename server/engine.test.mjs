@@ -11,7 +11,7 @@ const optionsOf=scene=>scene.options;
 const best=scene=>optionsOf(scene).toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
 const score=e=>Object.entries(e||{}).filter(([k])=>k!=='group').reduce((n,[,v])=>n+v,0)+(e?.group||0);
 // Existing simulations exercise persisted legacy rooms; modern flow is tested below.
-async function createPair(mode,prepare=true,modern=false){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(!modern){const row=db.rows.get(host.code),saved=JSON.parse(row.state_json);saved.match.presentation=1;saved.match.personal=false;row.state_json=JSON.stringify(saved); }if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});await act(db,host.code,token,{type:'confirmMatch'});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});await act(db,host.code,host.token,{type:'confirmVenue'});await act(db,host.code,guest.token,{type:'confirmVenue'});}return {db,host,guest};}
+async function createPair(mode,prepare=true,modern=false,chooseVenue=true){const db=new MemoryD1(),host=await createRoom(db),guest=await joinRoom(db,host.code);await act(db,host.code,host.token,{type:'mode',mode});await act(db,host.code,host.token,{type:'ready',value:true});await act(db,host.code,guest.token,{type:'ready',value:true});if(mode==='coach'&&chooseVenue){const m=JSON.parse(db.rows.get(host.code).state_json).match;await act(db,host.code,host.token,{type:'chooseVenue',venueId:getProfile(mode,m.profileId).venuePreference});}if(!modern){const row=db.rows.get(host.code),saved=JSON.parse(row.state_json);saved.match.presentation=1;saved.match.personal=false;row.state_json=JSON.stringify(saved); }if(mode==='doubleDate'&&prepare){const pair=CONTENT.doubleDate.pairs[0];for(const [role,token]of [host.token,guest.token].entries()){await act(db,host.code,token,{type:'location',city:role?'Lyon':'Paris'});await act(db,host.code,token,{type:'likeProfile',profileId:pair.profiles[role]});await act(db,host.code,token,{type:'confirmMatch'});}await act(db,host.code,host.token,{type:'venue',venueId:'kebab'});await act(db,host.code,guest.token,{type:'venue',venueId:'kebab'});await act(db,host.code,host.token,{type:'confirmVenue'});await act(db,host.code,guest.token,{type:'confirmVenue'});}return {db,host,guest};}
 async function identifyCorrect({db,host,guest},mode){const row=db.rows.get(host.code),room=JSON.parse(row.state_json),m=room.match;
  if(mode==='doubleDate'){
   for(let role=0;role<2;role++){const key=m.seats[role].find(x=>x.target).key;await act(db,host.code,role?guest.token:host.token,{type:'identify',key});}
@@ -377,4 +377,23 @@ test('each identification pack has one real person, two credible lookalikes and 
   for(const seat of publicState(room,0).seats){assert.match(seat.image,/\/people\/[a-f0-9]+\.webp$/);assert.equal(seat.target,undefined);assert.equal(seat.kind,undefined);}
   if(mode==='coach'){const hostView=JSON.stringify(publicState(room,0)),p=getProfile(mode,room.match.profileId);assert(!hostView.includes(p.bio));assert(!hostView.includes(p.media.photos[0]));assert.equal(publicState(room,1).scene,null);}
  }
+});
+
+
+test('Blind Foxy venue choice stays with the single player, keeps the dossier private and actually selects the destination',async()=>{
+ const {db,host,guest}=await createPair('coach',false,true,false);
+ const b=await readRoom(db,host.code,host.token),before=publicState(b.room,b.role),guide=publicState(b.room,1);
+ assert.equal(before.stage,'venue');assert.equal(before.scene,null);assert.equal(before.seats,null);assert.equal(before.dossier,undefined);assert.equal(guide.scene,null);assert.equal(guide.deadline,null);assert(guide.dossier.bio);
+ assert.equal(guide.dossier.venuePreference,undefined);
+ await assert.rejects(()=>act(db,host.code,guest.token,{type:'chooseVenue',venueId:'kebab'}),/célibataire/);
+ await assert.rejects(()=>act(db,host.code,host.token,{type:'chooseVenue',venueId:'missing'}),/Lieu indisponible/);
+ const row=db.rows.get(host.code),room=JSON.parse(row.state_json);room.match.profileId='coach-katell';row.state_json=JSON.stringify(room);
+ await act(db,host.code,host.token,{type:'chooseVenue',venueId:'kebab'});
+ const m=JSON.parse(row.state_json).match;assert.equal(m.venue.id,'kebab');assert.equal(m.scores[0].connection,-1);
+ const wrong=m.seats.find(s=>!s.target).key;
+ const state=await act(db,host.code,host.token,{type:'identify',key:wrong});
+ assert.equal(state.venue.id,'kebab');assert.match(state.arrivalNotice,/distributeur de serviettes/);assert.match(state.arrivalNotice,/quelqu’un/);
+ assert(!/points|affinité|respect|−[0-9]/.test(state.arrivalNotice));assert.equal(state.actor.mood,'displeased');assert.equal(state.scores,undefined);
+ const c=await readRoom(db,host.code,guest.token),coach=publicState(c.room,c.role);assert.equal(coach.actor,undefined);assert.equal(coach.arrivalNotice,undefined);assert.equal(coach.scene,null);
+ await assert.rejects(()=>act(db,host.code,host.token,{type:'chooseVenue',venueId:'luxury'}),/célibataire/);
 });

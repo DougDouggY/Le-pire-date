@@ -104,6 +104,10 @@ function renderLobby(s){
 let browseIndex=0,browseMatch=null,browseDetails=null;
 function renderSetup(s){
  if(browseMatch!==s.matchId){browseIndex=0;browseMatch=s.matchId;browseDetails=null;}
+ if(s.stage==='venue'&&s.mode==='coach'){
+  content().innerHTML=`<section class="mp-page"><p class="mp-kicker">BLIND FOXY · L’INVITATION</p><h1>Où l’emmènes-tu ?</h1><p class="mp-muted">Ton Coach connaît son profil. Écoute ses conseils, puis choisis une adresse : vous irez à cet endroit.</p><div class="mp-venue-grid">${s.venues.map(v=>`<button class="mp-venue-card" data-blind-venue="${esc(v.id)}"><img src="${esc(v.image)}" alt=""><div><b>${esc(v.name)}</b><small>${esc(v.tag)}</small></div></button>`).join('')}</div>${chatHtml(s)}</section>`;
+  content().querySelectorAll('[data-blind-venue]').forEach(b=>b.onclick=async()=>{try{await send({type:'chooseVenue',venueId:b.dataset.blindVenue});}catch(e){fail(e);}});bindChat();return;
+ }
  if(s.stage==='venue'){
   content().innerHTML=`<section class="mp-page"><p class="mp-kicker">DEUX MATCHS · UNE SOIRÉE</p><h1>Où on se retrouve ?</h1>${peopleHtml(s)}<p class="mp-muted">Choisissez tous les deux la même adresse pour y aller ensemble.</p><div class="mp-venue-grid">${s.venues.map(v=>`<button class="mp-venue-card ${s.venueVotes[s.me]===v.id?'selected':''}" data-venue="${v.id}"><img src="${v.image}" alt=""><div><b>${esc(v.name)}</b><small>${esc(v.tag)}</small>${[0,1].filter(role=>s.venueVotes[role]===v.id).map(role=>`<small>♥ ${esc(playerName(s,role))}</small>`).join('')}</div></button>`).join('')}</div><button class="mp-btn" id="mp-confirm-venue" ${!s.venueVotes[s.me]||s.venueConfirmed[s.me]?'disabled':''}>${s.venueConfirmed[s.me]?'Lieu confirmé · en attente de ton ami':'Valider ce lieu'}</button>${chatHtml(s)}</section>`;
   content().querySelector('#mp-confirm-venue').onclick=async()=>{try{await send({type:'confirmVenue'});}catch(e){fail(e);}};
@@ -147,11 +151,11 @@ function bindProfiles(){content().querySelectorAll('[data-profile-gallery]').for
 function dateActors(s){
  const p=s.actor||s.profiles?.find(p=>p.mine)||s.profile;
  if(!p)return '';
- return `<div class="mp-restaurant-scene" aria-label="${esc(s.venue?.name||'Le restaurant')}"><div class="mp-window-light"></div><div class="mp-date-actor ${esc(s.actor?.tone||'neutral')}" data-actor><img src="${esc(p.photo)}" alt="${esc(p.name)}"><span>${esc(p.name)}</span></div><div class="mp-restaurant-table" aria-hidden="true"></div></div>`;
+ return `<div class="mp-restaurant-scene" data-venue="${esc(s.venue?.id||'luxury')}" aria-label="${esc(s.venue?.name||'Le restaurant')}"><div class="mp-window-light"></div><div class="mp-date-actor ${esc(s.actor?.mood||'neutral')}" data-actor><img src="${esc(p.photo)}" alt="${esc(p.name)}" data-actor-image><span>${esc(p.name)}</span></div><div class="mp-restaurant-table" aria-hidden="true"></div></div>`;
 }
 function renderIdentification(s){
  const coach=s.mode==='coach'&&s.me===1;
- if(coach)return `<section class="mp-page mp-coach-intro"><p class="mp-kicker">BLIND FOXY · TON AMI NE VOIT PAS CE PROFIL</p><h1>${s.identifying?'Décris-lui ton match.':'Ton ami compte sur toi.'}</h1><p class="mp-muted">${s.identifying?'Toi seul as son profil. Ton ami voit quatre personnes : décris-lui la candidate à la voix.':'Ton ami vit le rendez-vous. Il te raconte ce qui se passe ; parcours son profil pour réfléchir avec lui. Le contexte compte autant que les indices.'}</p>${profileReference(s)}${chatHtml(s)}</section>`;
+ if(coach)return `<section class="mp-page mp-coach-intro"><p class="mp-kicker">BLIND FOXY · TON AMI NE VOIT PAS CE PROFIL</p><h1>${s.stage==='venue'?'Aide-le à choisir le lieu.':s.identifying?'Décris-lui ton match.':'Ton ami compte sur toi.'}</h1><p class="mp-muted">${s.stage==='venue'?'Toi seul as son profil. Regarde ce qui lui plaît et conseille une adresse à ton ami. C’est lui qui l’invite et choisit le lieu.':s.identifying?'Toi seul as son profil. Ton ami voit quatre personnes : décris-lui la candidate à la voix.':'Ton ami vit le rendez-vous. Il te raconte ce qui se passe ; parcours son profil pour réfléchir avec lui. Le contexte compte autant que les indices.'}</p>${profileReference(s)}${chatHtml(s)}</section>`;
  const reference=s.mode==='coach'?'':`<details class="mp-pocket-profile"><summary>Revoir son profil</summary>${profileReference(s)}</details>`;
  const heading=s.identified?'Tu as choisi.':'Laquelle est ton rendez-vous ?';
  return `<section class="mp-page mp-arrival"><p class="mp-kicker">${esc(s.venue?.name||'LE RESTAURANT')} · RECONNAISSANCE</p><h1>${heading}</h1><p class="mp-muted">${s.identified?`Attends que ${esc(playerName(s,1-s.me))} ait aussi reconnu son match.`:s.mode==='coach'?'Ton Coach a la vraie photo. Écoute ses indices pour choisir parmi les quatre personnes.':'Chacun cherche sa partenaire parmi quatre personnes. Vos choix se font séparément.'}</p>${reference}${s.identified?'':`<div class="mp-tableau"><div class="mp-candidates">${candidateHtml(s)}</div></div>`}${chatHtml(s)}</section>`;
@@ -176,7 +180,17 @@ else{
 }
 scene+='</div>';
 content().innerHTML=`<section class="mp-page mp-live-date"><div class="mp-date-top"><span>${esc(s.venue?.name||'LE RESTAURANT')}</span><small>${esc(playerName(s,s.me))}${isCoach?' · Coach':''}</small></div>${s.sharedMoment?`<p class="mp-shared-moment">${esc(s.sharedMoment)}</p>`:''}${dateActors(s)}<div class="mp-conversation">${scene}</div>${isCoach?`<aside class="mp-coach-phone"><h2>Son profil Foxy</h2>${profileReference(s)}</aside>`:s.mode==='doubleDate'?`<details class="mp-pocket-profile"><summary>Mon téléphone · revoir son profil</summary>${profileReference(s)}</details>`:''}<details class="mp-chat-pocket"><summary>Parler à ${esc(playerName(s,1-s.me))}</summary>${chatHtml(s)}</details></section>`;
-bindPlay(s);}
+bindPlay(s);animateActor(s);}
+const actorReactions=new Map();let actorTimer;
+function animateActor(s){
+ clearTimeout(actorTimer);const image=content().querySelector('[data-actor-image]'),actor=s.actor;
+ if(!image||!actor?.transient)return;
+ const now=Date.now(),key=actor.transient.id;if(!actorReactions.has(key))actorReactions.set(key,now);
+ if(actorReactions.size>100)actorReactions.delete(actorReactions.keys().next().value);
+ const remaining=2000-(now-actorReactions.get(key));if(remaining<=0)return;
+ image.src=actor.transient.photo;image.closest('[data-actor]').classList.add('mp-reacting');
+ actorTimer=setTimeout(()=>{if(image.isConnected){image.src=actor.photo;image.closest('[data-actor]').classList.remove('mp-reacting');}},remaining);
+}
 function revealHtml(s){return (s.lastReveal||[]).map(x=>`<div class="mp-result" aria-live="polite"><small>${esc(playerName(s,x.role))} a répondu</small><p class="mp-spoken-choice">« ${esc(x.text)} »</p><small>${esc(x.speaker||s.dossier?.name||s.actor?.name||s.profiles?.find(p=>p.mine)?.name||s.profile?.name||'Ton rendez-vous')}</small><p class="mp-spoken-reply">${esc(x.reply)}</p></div>`).join('');}
 
 function bindPlay(s){
@@ -200,7 +214,7 @@ function render(s){
  content().querySelectorAll('details').forEach(x=>{x.open=expanded.includes(x.querySelector('summary')?.textContent);});
 }
 function renderState(s){state=s;root.classList.toggle('mp-at-date',s.phase==='playing'&&!['foxy','venue'].includes(s.stage));root.querySelector('.mp-head .mp-kicker').textContent=appName(s.mode||selectedApp);root.style.setProperty('--mp-venue-image',s.venue?`url("${s.venue.image}")`:'url("/solo/assets/restaurant-vide.webp")');if(typeof s.me==='number'&&room.role!==s.me){room.role=s.me;localStorage.setItem('lpdate-mp',JSON.stringify(room));}if(s.phase==='lobby'){renderLobby(s);return;}if(s.phase==='playing'){if(s.mode==='coach'&&s.me===1&&!s.ending){content().innerHTML=renderIdentification(s);bindChat();return;}if(s.stage==='foxy'||s.stage==='venue'){renderSetup(s);return;}if(s.identifying){content().innerHTML=renderIdentification(s);if(!(s.mode==='coach'&&room.role===1))content().querySelectorAll('[data-seat]').forEach(b=>b.onclick=async()=>{try{await send({type:'identify',key:b.dataset.seat});}catch(e){fail(e);}});bindChat();return;}renderPlay(s);return;}home();}
-setInterval(()=>{const el=content().querySelector('[data-deadline]');if(homeView||!el||!state?.deadline||document.hidden||!root.classList.contains('on'))return;const remaining=Math.max(0,Math.ceil((state.deadline-(Date.now()+(state.serverNow-clientReceivedAt)))/1000));el.textContent=`${remaining} s pour répondre · −2 affinité si le temps expire`;if(!remaining&&!sending)send({type:'timeout',round:state.round,sceneId:state.scene?.id}).catch(fail);},1000);
+setInterval(()=>{const el=content().querySelector('[data-deadline]');if(homeView||!el||!state?.deadline||document.hidden||!root.classList.contains('on'))return;const remaining=Math.max(0,Math.ceil((state.deadline-(Date.now()+(state.serverNow-clientReceivedAt)))/1000));el.textContent=`${remaining} s pour répondre`;if(!remaining&&!sending)send({type:'timeout',round:state.round,sceneId:state.scene?.id}).catch(fail);},1000);
 window.openMP=open;
 const old=savedRoom('lpdate-mp');if(old)room=old;
 })();

@@ -34,3 +34,19 @@
 .mp-profile-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:20px auto 40px}.mp-foxy-body .mp-profile-questions{text-align:left}
 .mp-conversation .mp-result{background:none;padding:8px 0;margin:0}
 .mp-restaurant-scene .mp-restaurant-table{bottom:-70px;left:-10%;width:120%;height:100%;padding:0;border:0;border-radius:0;box-shadow:none;display:block;background:url('/solo/assets/mp/table-foreground.webp') center bottom/100% auto no-repeat;pointer-events:none}
+/* Foxy visual novel: venue fills the scene, cutout actor in front,
+   dialogue/answers stay below on both desktop and mobile. */
+#mp-overlay.mp-at-date{background:linear-gradient(#100d1415,#100b1255),var(--mp-venue-image) center/cover fixed}
+.mp-live-date{display:block!important;max-width:1100px;margin:auto;padding-top:10px}
+.mp-restaurant-scene{height:clamp(300px,42vh,540px);width:100%;max-width:1100px;background:none;border-radius:0;overflow:hidden}
+.mp-date-actor{width:min(600px,85%);height:100%;bottom:0}
+.mp-date-actor img{object-fit:contain;object-position:50% 100%;border-radius:0;mask-image:none;filter:drop-shadow(0 10px 24px #0006)}
+.mp-date-actor span{bottom:6%;font-size:18px}
+.mp-date-actor.mp-reacting{animation:mp-breathe 4s ease-in-out infinite}
+.mp-conversation{width:100%;max-width:1000px;margin:0 auto;position:relative}
+.mp-conversation .mp-scene{background:linear-gradient(145deg,#21151ceb,#130e18f2);backdrop-filter:blur(8px);padding:20px 26px;border-radius:20px;box-shadow:0 12px 35px #0006}
+.mp-conversation .mp-question{font-size:clamp(21px,2.5vw,30px);margin:8px 0 16px}
+.mp-arrival-notice,.mp-notice{font:italic 22px/1.5 Georgia,serif;color:#ffe5c3;padding:14px 18px;border-left:3px solid #d5a97d;background:#ffe6b60a}
+@media(max-width:600px){.mp-restaurant-scene{height:34dvh;min-height:240px;max-height:360px}.mp-date-actor{width:92%}.mp-conversation .mp-scene{padding:17px 15px}.mp-at-date .mp-head{padding:5px 12px}.mp-at-date .mp-shell{padding:10px}.mp-conversation .mp-choice{font-size:15px;padding:12px 14px}.mp-date-actor span{bottom:5%}}
+/* The venue already contains its own table. Keep the entire bust readable. */
+.mp-restaurant-table{display:none!important}

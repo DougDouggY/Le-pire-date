@@ -1,3 +1,4 @@
+import { arrivalFor, moodFor, SPRITES } from './date-presentation.mjs';
 import { SHARED_MOMENTS } from './personal-content.mjs';
 import { CONTENT, NARRATIVE_BRANCHES, NARRATIVE_OBSERVATIONS, getPair, getProfile, publicProfile, coachDossier } from './content.mjs';
 import { VENUES, participant, completeSocialResult, resetForRematch } from './social.mjs';
@@ -14,7 +15,7 @@ function buildMatch(mode, excluded=null){
  if(mode==='doubleDate'){
   const pairs=content.pairs.filter(x=>x.id!==excluded);const pair=pick(pairs.length?pairs:content.pairs); return {id:crypto.randomUUID(),presentation:2,personal:true,ownReplies:[null,null],nextReady:[false,false],stage:'foxy',setup:{cities:['',''],liked:[false,false],confirmed:[false,false],pairId:null,profileIds:[null,null],venueVotes:[null,null],venueConfirmed:[false,false]},mode,kind:pair.id, pair:{title:pair.title,relation:pair.relation,opening:pair.opening,profiles:pair.profiles.map(id=>getProfile(mode,id).id)}, round:0, picks:{}, scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}], group:0, memories:[], done:false};
  }
- const candidates=content.profiles.filter(x=>x.id!==excluded);const p=pick(candidates.length?candidates:content.profiles); return {id:crypto.randomUUID(),presentation:2,stage:'identification',mode,profileId:p.id,round:0,picks:{},scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}],memories:[],done:false};
+ const candidates=content.profiles.filter(x=>x.id!==excluded);const p=pick(candidates.length?candidates:content.profiles); return {id:crypto.randomUUID(),presentation:2,chooseVenue:mode==='coach',stage:mode==='coach'?'venue':'identification',mode,profileId:p.id,round:0,picks:{},scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}],memories:[],done:false};
 }
 function scenesFor(match,role=0){if(match.mode==='doubleDate'&&match.personal)return getProfile('doubleDate',match.pair.profiles[role]).duoScenes; if(match.mode==='doubleDate') return getPair(match.kind).rounds; const p=getProfile(match.mode,match.profileId);return match.mode==='coach'&&match.presentation===2?p.communicationScenes:p.scenes||p.stories||[]; }
 function sceneFor(match,role=0){let scene=scenesFor(match,role)[match.round];if(!scene)return null;if(match.personal&&match.round===4&&match.memories.some(m=>m.role===role&&m.tag===`${match.pair.profiles[role]}-rushed-0`)){const callbacks={'dd-livia':'Avant de parler de se revoir, Livia revient sur le début : « Quand je parlais des sons de la ville, tu voulais surtout les couper. Tu aurais envie de découvrir ce que j’entends ? »','dd-solene':'Solène revient sur votre arrivée : « Tu voulais prendre le contrôle pour que je me détende. Si on se revoit, on pourrait essayer de choisir à deux ? »','dd-naima':'Naïma reprend ton commentaire sur son détour : « Mon trajet n’était pas une erreur. Tu aurais quand même envie de venir regarder cet atelier avec moi ? »','dd-iris':'Iris regarde l’heure : « Tu voulais que je reste plus longtemps pour toi. Ce café du matin, tu pourrais le prendre comme un vrai rendez-vous ? »'};scene={...scene,prompt:callbacks[match.pair.profiles[role]],options:scene.options.map(o=>o.id.endsWith('-listen')?{...o,reply:'« Merci de revenir sur ce qu’on a dit. » '+o.reply}:o)};}const key=`${match.mode==='doubleDate'?(match.personal?match.pair.profiles[role]:match.kind):match.profileId}:${scene.id}`;const branch=(NARRATIVE_BRANCHES[key]||[]).find(x=>match.memories.some(m=>m.tag===x.memory&&(!match.personal||m.role===role)));return branch?{...scene,prompt:branch.prompt,options:branch.options}:scene;}
@@ -25,7 +26,7 @@ function finalizeMatch(room,m,scenes){if(m.round<scenes.length)return;m.done=tru
 function finishCoach(m,difficulty){if(m.round<scenesFor(m).length)return;m.done=true;m.deadline=null;const pass=difficulty==='facile'?m.scores[0].connection>=3&&m.scores[0].trust>=0:difficulty==='difficile'?m.scores[0].connection>=6&&m.scores[0].trust>=2:m.scores[0].connection>=4&&m.scores[0].trust>=1;m.ending=pass?'Elle propose un deuxième rendez-vous. Votre ami a su écouter, et toi l’aider à lire ce qui n’était pas dit.':'Elle vous remercie pour la soirée. Vous avez repéré certains indices, mais pas encore trouvé la bonne façon d’y répondre.';m.winner=pass?0:null;}
 function applyCoachTimeout(m,now,difficulty){
  m.scores[0].connection-=2;m.timeoutCount=(m.timeoutCount||0)+1;
- m.lastReveal=[{role:0,text:'Le silence s’installe…',reply:'Elle perd un peu d’intérêt. −2 affinité.',tone:'awkward'}];
+ m.lastReveal=[{role:0,text:'Le silence s’installe…',reply:'« Tu es encore avec moi ? J’ai l’impression de parler toute seule… »',tone:'awkward'}];
  m.round++;m.deadline=now+45000;
  finishCoach(m,difficulty);
 }
@@ -67,9 +68,16 @@ export function publicState(room, role){
  base.deadline=m.deadline||null;base.serverNow=Date.now();base.timeoutCount=m.timeoutCount||0;
  base.venue=m.venue||VENUES[0];
  base.reaction=m.reaction?{id:m.reaction.id,ready:!!m.reaction.ack[role],both:true}:null;
- if(!m.seats&&!(mode==='coach'&&role===1)){const p=getProfile(mode,mode==='doubleDate'?m.pair.profiles[role]:m.profileId),tone=(m.personal?m.ownReplies?.[role]:m.reaction?m.lastReveal?.find(r=>r.role===role)||m.lastReveal?.[0]:null)?.tone||'neutral';base.actor={name:p.name,photo:p.media.actor[tone]||p.media.actor.neutral,tone};if(m.round===0&&m.identification?.[role]===false&&!m.ownReplies?.[role]&&!m.reaction)base.arrivalNotice='Tu avais choisi un sosie. Ta vraie partenaire te fait signe : « J’étais juste à côté… » La maladresse a coûté 3 points de respect.';}
+ if(!m.seats&&m.stage!=='venue'&&!(mode==='coach'&&role===1)){
+  const p=getProfile(mode,mode==='doubleDate'?m.pair.profiles[role]:m.profileId),reply=m.personal?m.ownReplies?.[role]:m.reaction?m.lastReveal?.find(r=>r.role===role)||m.lastReveal?.[0]:null;
+  const mood=moodFor(m.scores[mode==='coach'?0:role]);const sprites=SPRITES[p.id];
+  base.actor={name:p.name,photo:sprites?.[mood]||p.media.actor.neutral,mood,transient:reply?{id:`${m.id}:${m.round}:${reply.option||'timeout'}`,photo:sprites?.[reply.tone==='warm'?'delighted':'displeased']||p.media.actor[reply.tone]||p.media.actor.neutral}:null};
+  if(m.round===0&&!reply)base.arrivalNotice=arrivalFor(p,m.venue?.id,m.identification?.[role]===false);
+ }
+
  base.result=m.done&&m.result?{...m.result,dates:m.result.dates[role]||[]}:null;
  const preparation=setupState(room,role);if(preparation)return {...base,...preparation};
+ if(mode==='coach'&&m.stage==='venue')return role===1?{...base,stage:'venue',roleView:'coach',dossier:coachDossier(getProfile(mode,m.profileId)),targetImage:facePath(getProfile(mode,m.profileId)),scene:null,lastReveal:[],reaction:null,deadline:null,seats:null}:{...base,stage:'venue',venues:VENUES,scene:null,seats:null};
  const identification={
   identifying:!!m.seats,
   identified:!!m.identified?.[role],
@@ -133,6 +141,12 @@ async function actOnce(db,roomCode,bearer,action){
   room.modeSuggestions??=[null,null];room.modeSuggestions[role]=action.mode;
   await save(db,row,room);return publicState(room,role);
  }
+ if(action.type==='chooseVenue'){
+  const m=room.match;if(room.phase!=='playing'||m?.mode!=='coach'||m.stage!=='venue'||role!==0)throw Error('Seul le célibataire choisit le lieu');
+  const venue=VENUES.find(v=>v.id===action.venueId);if(!venue)throw Error('Lieu indisponible');m.venue=venue;
+  const p=getProfile('coach',m.profileId);applyEffect(m.scores[0],p.venuePreference===venue.id?{connection:1}:{connection:-1},room.difficulty);initializeSeats(m);
+  await save(db,row,room);return publicState(room,role);
+ }
  if(['location','likeProfile','confirmMatch','venue','confirmVenue'].includes(action.type)){
   const m=room.match;
   if(room.phase!=='playing'||m?.mode!=='doubleDate'||!m.setup)throw Error('Préparation indisponible');
@@ -168,7 +182,7 @@ async function actOnce(db,roomCode,bearer,action){
  }
  if(action.type==='ready'){
   if(room.phase!=='lobby'||!room.mode||!room.players[1]||room.lastSeen.some(t=>Date.now()-t>PRESENCE_TIMEOUT_MS))throw Error('Il manque un joueur connecté ou un mode');room.ready[role]=!!action.value;
-  if(room.ready[0]&&room.ready[1]){room.phase='playing';room.match=buildMatch(room.mode,room.previousProfileId||null);room.previousProfileId=null;room.rematchVotes=[null,null];if(room.mode!=='doubleDate')initializeSeats(room.match);}
+  if(room.ready[0]&&room.ready[1]){room.phase='playing';room.match=buildMatch(room.mode,room.previousProfileId||null);room.previousProfileId=null;room.rematchVotes=[null,null];if(room.mode!=='doubleDate'&&!room.match.chooseVenue)initializeSeats(room.match);}
   await save(db,row,room);return publicState(room,role);
  }
  if(action.type==='identify'){

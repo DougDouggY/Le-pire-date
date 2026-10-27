@@ -24,7 +24,7 @@ async function eventually(check,message){
  assert.fail(message);
 }
 async function open(page,name='Camille'){await page.goto(`${baseURL}/solo/index.html`);await page.click('#openMultiplayer');if(await page.locator('#mp-player-name').count())await page.fill('#mp-player-name',name);}
-async function createPair(browser,mode,names=['Alex','Robin']){
+async function createPair(browser,mode,names=['Alex','Robin'],venueChoice='preferred'){
  const contexts=await Promise.all([browser.newContext(),browser.newContext()]);
  const pages=await Promise.all(contexts.map(c=>c.newPage()));
  for(const page of pages){
@@ -44,6 +44,7 @@ async function createPair(browser,mode,names=['Alex','Robin']){
  for(const [role,page] of pages.entries())await page.fill('#mp-player-name',names[role]);
  await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
  if(mode==='doubleDate')await prepareDoubleDate(pages);
+ if(mode==='coach'){await pages[1].locator('.mp-reference-portrait').waitFor();const guide=await view(pages[1]);const p=CONTENT.coach.profiles.find(p=>p.name===guide.dossier.name);const venue=venueChoice==='wrong'?['luxury','kebab','arcade'].find(v=>v!==p.venuePreference):p.venuePreference;await pages[0].locator(`[data-blind-venue="${venue}"]`).click();}
  await pages[0].locator('.mp-candidates').waitFor();await pages[1].locator(mode==='coach'?'.mp-reference-portrait':'.mp-candidates').waitFor();
  return {contexts,pages};
 }
@@ -181,7 +182,7 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
     await Promise.all(pages.map(p=>p.locator('#mp-ready').waitFor()));
     await eventually(async()=>await pages[1].locator('#mp-difficulty').count()===1,'Swapped host did not regain lobby controls');
     await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
-    await pages[0].locator('.mp-reference-portrait').waitFor();await pages[1].locator('[data-seat]').first().waitFor();
+    await pages[0].locator('.mp-reference-portrait').waitFor();const guide=await view(pages[0]);const target=CONTENT.coach.profiles.find(p=>p.name===guide.dossier.name);await pages[1].locator(`[data-blind-venue="${target.venuePreference}"]`).click();await pages[1].locator('[data-seat]').first().waitFor();
     assert.notEqual((await view(pages[0])).dossier.name,previous);
     // Same UI workflow, but the physical devices now have the opposite roles.
     const swapped=[pages[1],pages[0]];await identify(swapped,mode);await play(swapped,mode,'win');
@@ -229,7 +230,7 @@ test('Blind Foxy: timeout reaction is shown to the single player and kept privat
   assert.equal(before.dossier,undefined);assert((await view(pages[1])).dossier);
   await delay(46000);
   await eventually(async()=>{const after=await view(pages[0]);return !!after.reaction&&after.timeoutCount===1&&after.deadline===null;},'Deadline did not advance the round');
-  await pages[0].locator('.mp-result').filter({hasText:'−2 affinité'}).waitFor();assert.equal(await pages[1].locator('.mp-result').count(),0);assert.deepEqual((await view(pages[1])).lastReveal,[]);
+  await pages[0].locator('.mp-result').filter({hasText:'Tu es encore avec moi ?'}).waitFor();assert(!/affinité|−2/.test(await pages[0].locator('.mp-result').textContent()));assert.equal(await pages[1].locator('.mp-result').count(),0);assert.deepEqual((await view(pages[1])).lastReveal,[]);
   const after=await view(pages[1]);assert.equal(after.timeoutCount,1);assert.equal(after.round,before.round);assert.equal(after.scene,null);await pages[0].click('#mp-next-scene');assert.equal((await view(pages[0])).round,before.round+1);assert.equal((await view(pages[0])).timeoutCount,1);
   for(const page of pages)assert.deepEqual(page.errors,[]);
  }finally{await browser.close();}
@@ -286,6 +287,28 @@ test('Blind Foxy profile photos remain whole and locally browsable while live di
   await single.locator('[data-option]').first().click();await single.locator('.mp-spoken-reply').waitFor();assert.equal((await view(coach)).scene,null);assert.equal(await coach.locator('.mp-spoken-choice,.mp-spoken-reply,.mp-question').count(),0);
   await single.click('#mp-next-scene');await eventually(async()=>(await view(coach)).round===2,'Second scene did not begin');
   assert.equal(await coach.locator('.mp-reference-portrait').getAttribute('src'),photo);assert.equal((await view(coach)).scene,null);
+  for(const page of pages)assert.deepEqual(page.errors,[]);
+ }finally{await browser.close();}
+});
+
+
+test('Blind Foxy: an unsuitable venue stays selected; the two-second reaction returns to cumulative mood without exposing scores',{timeout:90000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const {pages}=await createPair(browser,'coach',['Alex','Robin'],'wrong');await identify(pages,'coach');
+  const initial=await view(pages[0]);assert(initial.arrivalNotice);assert.equal(initial.actor.mood,'displeased');assert.equal(initial.scores,undefined);
+  await pages[0].locator('.mp-notice').waitFor();assert(!/affinité|points de respect/.test(await pages[0].locator('.mp-notice').textContent()));
+  const guide=await view(pages[1]);const authored=authoredScene(initial,guide),option=authored.options.toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
+  await pages[0].click(`[data-option="${option.id}"]`);await pages[0].locator('.mp-spoken-reply').waitFor();
+  const reply=await view(pages[0]);assert(reply.actor.transient);assert.notEqual(reply.actor.transient.photo,reply.actor.photo);
+  assert.equal(await pages[0].locator('[data-actor-image]').getAttribute('src'),reply.actor.transient.photo);
+  await eventually(async()=>await pages[0].locator('[data-actor-image]').getAttribute('src')===reply.actor.photo,'Transient face did not return to cumulative mood');
+  await delay(2500);assert.equal(await pages[0].locator('[data-actor-image]').getAttribute('src'),reply.actor.photo,'Polling replayed the reaction');
+  assert.equal((await view(pages[0])).venue.id,initial.venue.id);
+  const coach=await view(pages[1]);assert.equal(coach.actor,undefined);assert.equal(coach.scene,null);assert.equal(coach.arrivalNotice,undefined);assert.equal(await pages[1].locator('[data-actor-image],.mp-spoken-reply').count(),0);
+  await pages[0].setViewportSize({width:390,height:844});
+  const layout=await pages[0].evaluate(()=>({actor:document.querySelector('.mp-restaurant-scene').getBoundingClientRect().bottom,dialogue:document.querySelector('.mp-conversation').getBoundingClientRect().top,overflow:document.querySelector('#mp-overlay').scrollWidth>innerWidth}));
+  assert(layout.dialogue>=layout.actor-2);assert.equal(layout.overflow,false);
   for(const page of pages)assert.deepEqual(page.errors,[]);
  }finally{await browser.close();}
 });

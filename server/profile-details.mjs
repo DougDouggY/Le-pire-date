@@ -18,7 +18,14 @@ const finalReplies={'coach-dounia':['« J’aime les fondants, pas qu’on en co
 const endingScene=(p,prompt,good,reply,bad,miss)=>({id:`${p.id}-after-dinner`,prompt,options:[c('offer',good,reply,{connection:2,trust:1,respect:1}),c('rush',bad,finalReplies[p.id][0],{connection:-1,trust:-1}),c('miss',miss,finalReplies[p.id][1],{connection:0,respect:-1})]});
 export function installProfileDetails(content){
  for(const pool of Object.values(content))for(const p of pool.profiles){p.media=MEDIA[p.id];p.questions=questions[p.id].map(([question,answer])=>({question,answer}));}
+ const preferences={
+  'coach-dounia':['kebab',' Pour sortir, un comptoir vivant, du pain chaud et les manches retroussées me vont très bien.'],
+  'coach-katell':['luxury',' J’ai un faible pour les belles choses, les lumières soignées et les tables d’où on voit la ville de haut.'],
+  'coach-roxane':['luxury',' Après le travail, j’aime les tables tranquilles, une jolie vue et les conversations sans fond sonore imposé.'],
+  'coach-safia':['arcade',' J’aime les lieux qui ont gardé leurs néons et leurs vieilles machines. Une partie me rappelle plus de choses qu’un décor impeccable.']
+ };
  for(const p of content.coach.profiles){
+  p.venuePreference=preferences[p.id][0];p.bio+=preferences[p.id][1];
   if(p.id==='coach-dounia'){
    const dessert=endingScene(p,'Le serveur demande si vous voulez autre chose. Dounia ferme la carte : « J’adore les desserts, mais là je n’ai vraiment plus faim. »','On garde le dessert pour une autre fois et on demande l’addition ?','« Parfait. J’aime beaucoup les fondants, mais je préfère encore quand on m’écoute. »','Je commande deux fondants, tu as écrit que tu étais gourmande.','On prend un dernier verre, ce sera forcément plus léger.');
    p.communicationScenes=[...p.scenes.slice(0,3),dessert,p.scenes[3]];

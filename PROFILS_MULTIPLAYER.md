@@ -17,10 +17,10 @@ Chaque profil a son propre pack d’identification : la vraie candidate, deux fe
 `server/media-manifest.mjs` contient la correspondance privée des douze identités :
 
 - `photos` : photo principale existante puis trois scènes de vie ;
-- `actor` : photographies neutre, souriante et gênée dans le même décor et la même tenue ;
+- `actor` : anciennes photographies neutre, souriante et gênée ; la neutre reste la référence du pack d’identification ;
 - `lookalikes` : deux sosies crédibles et le leurre absurde.
 
-Les 108 nouvelles images sont dans `public/solo/assets/mp/people/`, avec des noms opaques qui n’indiquent pas la réponse. Le décor de table est `public/solo/assets/mp/table-foreground.webp`. Les 12 planches de génération ont été contrôlées visuellement contre les portraits d’origine avant extraction et compression WebP. La vérification technique complète est :
+Les 108 images ajoutées pour les galeries et packs d’identification sont dans `public/solo/assets/mp/people/`, avec des noms opaques qui n’indiquent pas la réponse. Le décor de table `public/solo/assets/mp/table-foreground.webp` est conservé ; la nouvelle scène utilise la table du lieu pour laisser le buste entièrement visible. Les 12 planches de génération ont été contrôlées visuellement contre les portraits d’origine avant extraction et compression WebP. La vérification technique complète est :
 
 ```bash
 node scripts/audit-profile-assets.mjs
@@ -45,3 +45,25 @@ Duo propose quatre profils et laisse les deux joueurs choisir indépendamment de
 Dans Duo et Versus, la réaction reste en grand tant que les deux lecteurs n’ont pas demandé la suite. Les choix Versus simultanés restent privés avant résolution. Les actions incluent une scène ou un identifiant de réaction afin qu’un clic retardé ne saute pas une étape.
 
 Les anciens scénarios et embranchements restent disponibles aux salons déjà engagés. Créer un nouveau salon pour utiliser les nouveaux parcours. Aucune migration ni suppression de données n’est nécessaire.
+
+## Mise en scène Foxy et humeur
+
+Les douze personnages multijoueurs possèdent chacun six sprites WebP transparents
+(neutre, sourire, très heureuse, contrariée, déçue, en colère), référencés seulement
+par `server/sprite-manifest.mjs`. Les photos du profil et des sosies restent intactes.
+Le lieu remplit l’arrière-plan ; le personnage est détouré devant le décor, et les
+questions/choix sont placés sous la scène sur ordinateur et téléphone.
+
+Le serveur déduit l’humeur du cumul des conséquences. Après une réponse, le client
+montre une réaction immédiate pendant deux secondes, puis revient à l’humeur
+courante. Une actualisation de synchronisation ne relance pas les deux secondes.
+Les scores et pénalités restent internes, y compris pour le temps écoulé et les
+sosies ; le jeu les exprime par des répliques et les expressions du personnage.
+
+Dans les nouvelles parties Blind Foxy, le célibataire choisit le lieu avant
+l’identification. Le Coach lit les préférences discrètes de la bio et conseille à
+la voix ; il ne reçoit ni classement de lieux ni écran de choix. Le serveur garde
+le lieu choisi même s’il est inadapté, applique sa conséquence une seule fois et
+compose une remarque d’arrivée propre à la personne et au lieu. Une confusion
+avec un sosie produit aussi une réplique, avant la première question. Les salons
+anciens déjà commencés continuent leur parcours sans être réinitialisés.
