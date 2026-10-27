@@ -247,3 +247,40 @@ test('Blind Foxy: both browsers observe the server timeout and affinity penalty'
   for(const page of pages)assert.deepEqual(page.errors,[]);
  }finally{await browser.close();}
 });
+
+for(const [button,mode] of [['openMultiplayer','doubleDate'],['openVersus','versus'],['openCoach','coach']]){
+ test(`${mode}: unavailable saved room recovers without losing contacts and a new invitation works`,{timeout:60000},async()=>{
+  const browser=await chromium.launch(browserOptions);
+  try{
+   const contexts=await Promise.all([browser.newContext(),browser.newContext()]);const pages=await Promise.all(contexts.map(c=>c.newPage()));const [host,guest]=pages;
+   await host.goto(`${baseURL}/solo/`);assert.equal(await host.locator('#openVersus span').textContent(),'Foxy Versus');assert(await host.locator('.foxy-mode-icon').evaluateAll(images=>images.every(i=>i.complete&&i.naturalWidth>0)));
+   const snapshot=await host.evaluate(()=>{window.LP_CONTACTS.player('Camille');const snapshot=localStorage.getItem('lpdate.contacts.v1');const room={code:'PASTROOM',token:crypto.randomUUID()+crypto.randomUUID(),role:0};localStorage.setItem('lpdate-mp',JSON.stringify(room));localStorage.setItem('lpdate-mp-recovery',JSON.stringify(room));return snapshot;});
+   await host.reload();const calls=[];host.on('request',r=>{if(new URL(r.url()).pathname==='/api/multiplayer')calls.push(r.method());});
+   await host.click(`#${button}`);assert.equal(calls.length,0,'Opening the app tried to resume the old room');
+   await host.click('#mp-resume');await host.locator('.mp-notice').waitFor();
+   assert.equal(await host.locator('.mp-error').count(),0);assert.equal(await host.locator('#mp-resume').count(),0);
+   assert.equal(await host.evaluate(()=>localStorage.getItem('lpdate.contacts.v1')),snapshot);
+   assert.equal(await host.evaluate(()=>localStorage.getItem('lpdate-mp')),null);assert.equal(await host.evaluate(()=>localStorage.getItem('lpdate-mp-recovery')),null);
+   await host.clock.install();const stopped=calls.length;await host.clock.fastForward(60000);await delay(100);assert.equal(calls.length,stopped,'Expired room kept polling');await host.clock.resume();
+   await host.click('#mp-create');await host.locator('.mp-code').waitFor();const code=await host.locator('.mp-code').textContent();assert.notEqual(code,'PASTROOM');
+   await guest.goto(`${baseURL}/solo/`);await guest.click(`#${button}`);await guest.fill('#mp-join-code',code);await guest.click('#mp-join');await guest.locator('#mp-ready').waitFor();
+   const joined=await view(guest);assert.equal(joined.mode,mode);assert.equal(joined.me,1);assert.equal(await guest.locator('.mp-error').count(),0);
+   await host.clock.fastForward(10000);await host.locator('#mp-ready').waitFor();assert.equal((await view(host)).mode,mode);
+   const session=await host.evaluate(()=>JSON.parse(localStorage.getItem('lpdate-mp')));assert(session.expiresAt>Date.now());
+   await host.click('.mp-close');await host.evaluate(()=>{const room=JSON.parse(localStorage.getItem('lpdate-mp'));room.expiresAt=Date.now()-1;localStorage.setItem('lpdate-mp',JSON.stringify(room));});await host.click(`#${button}`);assert.equal(await host.locator('#mp-resume').count(),0);
+  }finally{await browser.close();}
+ });
+}
+
+test('a room lost while setting a nickname returns to an enabled invitation screen',{timeout:60000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const contexts=await Promise.all([browser.newContext(),browser.newContext()]);const [host,guest]=await Promise.all(contexts.map(c=>c.newPage()));
+  await open(host);await host.click('#mp-create');await host.locator('.mp-code').waitFor();const code=await host.locator('.mp-code').textContent();
+  await open(guest);await guest.fill('#mp-join-code',code);await guest.click('#mp-join');await host.locator('#mp-ready').waitFor();await host.fill('#mp-player-name','Camille');
+  // Inject a server-side disappearance between the displayed lobby and Ready.
+  await host.route('**/api/multiplayer',async route=>{const r=route.request();if(r.method()==='POST'&&r.postDataJSON()?.action?.type==='rename')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Salon introuvable ou expiré'})});return route.continue();});
+  await host.click('#mp-ready');await host.locator('.mp-notice').waitFor();assert(await host.locator('#mp-create').isEnabled());assert.equal(await host.locator('.mp-error').count(),0);
+  await host.unroute('**/api/multiplayer');await host.click('#mp-create');await host.locator('.mp-code').waitFor();assert.notEqual(await host.locator('.mp-code').textContent(),code);
+ }finally{await browser.close();}
+});

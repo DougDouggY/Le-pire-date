@@ -1,0 +1,8 @@
+/solo/app.js
+  Cache-Control: public, max-age=0, must-revalidate
+/solo/multiplayer.js
+  Cache-Control: public, max-age=0, must-revalidate
+/solo/social.css
+  Cache-Control: public, max-age=0, must-revalidate
+/solo/index.html
+  Cache-Control: public, max-age=0, must-revalidate

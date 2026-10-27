@@ -39,7 +39,7 @@ Limites relevées dans la documentation officielle :
 
 La disponibilité d'un compte Cloudflare gratuit ne prouve pas que son offre **Workers** est Free, ni qu'il lui reste du quota. Vérifier le forfait Workers, la consommation de l'autre jeu et la disponibilité d'un emplacement D1 avant création. Aucun état du compte n'a été inspecté pendant cette préparation.
 
-Le paquet autonome vérifié localement pèse environ 27 Ko compressés, avec 88 fichiers statiques au moment de la préparation. La taille ne pose pas de difficulté identifiée. Le respect des 10 ms CPU devra être confirmé dans les métriques du Worker réel : une simulation locale ne prouve pas cette limite en production.
+Le paquet autonome vérifié localement pèse environ 27 Ko compressés, avec 91 fichiers statiques au moment de la préparation. La taille ne pose pas de difficulté identifiée. Le respect des 10 ms CPU devra être confirmé dans les métriques du Worker réel : une simulation locale ne prouve pas cette limite en production.
 
 ### Synchronisation préparée
 

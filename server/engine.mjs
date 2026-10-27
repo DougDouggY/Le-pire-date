@@ -81,7 +81,7 @@ export function publicState(room, role){
 export async function createRoom(db, mode, player=null){
  const host=token(), state=startRoom();state.participants[0]=participant(player,0); if(mode&&modes.includes(mode)){state.mode=mode;state.phase='lobby';}
  const now=Date.now();await db.prepare('DELETE FROM multiplayer_rooms WHERE expires_at<=?').bind(now).run();let roomCode;
- for(let i=0;i<8;i++){roomCode=code();try{await db.prepare('INSERT INTO multiplayer_rooms (code,host_token_hash,state_json,revision,created_at,updated_at,expires_at) VALUES(?,?,?,0,?,?,?)').bind(roomCode,await hash(host),JSON.stringify(state),now,now,now+12*60*60*1000).run();return {code:roomCode,token:host,role:0};}catch(e){if(!String(e).includes('UNIQUE')) throw e;}}
+ for(let i=0;i<8;i++){roomCode=code();try{await db.prepare('INSERT INTO multiplayer_rooms (code,host_token_hash,state_json,revision,created_at,updated_at,expires_at) VALUES(?,?,?,0,?,?,?)').bind(roomCode,await hash(host),JSON.stringify(state),now,now,now+12*60*60*1000).run();return {code:roomCode,token:host,role:0,expiresAt:now+12*60*60*1000};}catch(e){if(!String(e).includes('UNIQUE')) throw e;}}
  throw Error('Impossible de créer un salon');
 }
 /** @param {object|null} [player] */
@@ -90,7 +90,7 @@ export async function joinRoom(db, roomCode, player=null){
  const guest=token(),room=JSON.parse(row.state_json),now=Date.now();room.participants??=[participant(null,0),null];room.participants[1]=participant(player,1);room.players[1]=true;room.lastSeen[1]=now;room.updated=now;
  if(room.participants[1].id===room.participants[0].id)throw Error('Ce profil est déjà dans le salon. Utilise un autre appareil ou un autre profil de navigateur pour le deuxième joueur.');
  const r=await db.prepare('UPDATE multiplayer_rooms SET guest_token_hash=?,state_json=?,revision=revision+1,updated_at=? WHERE code=? AND revision=? AND guest_token_hash IS NULL').bind(await hash(guest),JSON.stringify(room),now,row.code,row.revision).run();if(!r.meta?.changes)throw Error('Un autre joueur vient de rejoindre');
- return {code:row.code,token:guest,role:1,state:publicState(room,1)};
+ return {code:row.code,token:guest,role:1,expiresAt:row.expires_at,state:publicState(room,1)};
 }
 export async function readRoom(db, roomCode, bearer, attempt=0){
  const row=await db.prepare('SELECT * FROM multiplayer_rooms WHERE code=? AND expires_at>?').bind(roomCode,Date.now()).first(); if(!row) throw Error('Salon introuvable ou expiré');
@@ -104,7 +104,7 @@ async function actOnce(db,roomCode,bearer,action){
  const {row,room,role}=await readRoom(db,roomCode,bearer); const now=Date.now();
  if(action.type==='join'){
   if(role!==0) return publicState(room,role);
-  if(!room.players[1]){const guest=token(); const r=await db.prepare('UPDATE multiplayer_rooms SET guest_token_hash=?,revision=revision+1,updated_at=? WHERE code=? AND revision=? AND guest_token_hash IS NULL').bind(await hash(guest),now,row.code,row.revision).run();if(!r.meta?.changes) throw Error('Un autre joueur vient de rejoindre'); room.players[1]=true;room.lastSeen[1]=now; await db.prepare('UPDATE multiplayer_rooms SET state_json=? WHERE code=?').bind(JSON.stringify(room),row.code).run();return {code:row.code,token:guest,role:1,state:publicState(room,1)};}
+  if(!room.players[1]){const guest=token(); const r=await db.prepare('UPDATE multiplayer_rooms SET guest_token_hash=?,revision=revision+1,updated_at=? WHERE code=? AND revision=? AND guest_token_hash IS NULL').bind(await hash(guest),now,row.code,row.revision).run();if(!r.meta?.changes) throw Error('Un autre joueur vient de rejoindre'); room.players[1]=true;room.lastSeen[1]=now; await db.prepare('UPDATE multiplayer_rooms SET state_json=? WHERE code=?').bind(JSON.stringify(room),row.code).run();return {code:row.code,token:guest,role:1,expiresAt:row.expires_at,state:publicState(room,1)};}
   return {state:publicState(room,role)};
  }
  if(action.type==='heartbeat'){

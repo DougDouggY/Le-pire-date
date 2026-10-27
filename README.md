@@ -10,7 +10,7 @@ Jeu solo d’origine préservé et première tranche multijoueur en ligne pour d
 
 ## Le téléphone : Contacts et Foxy Duo
 
-Le téléphone propose six applications : **Foxy**, **Succès**, **Contacts**, **Foxy Duo** (Double Date), **Speedy Foxy Dating** (Versus) et **Blind Foxy** (Coach). Les outils de test sont regroupés dans un panneau repliable.
+Le téléphone propose six applications : **Foxy**, **Succès**, **Contacts**, **Foxy Duo** (Double Date), **Foxy Versus** (Versus) et **Blind Foxy** (Coach). Les outils de test sont regroupés dans un panneau repliable.
 
 - **Contacts** conserve sur cet appareil les partenaires rencontrés, les parties terminées avec chacun, les victoires/défaites, et distingue les victoires en coopération des victoires face à face. Les noms et l'identité locale persistent entre les salons. Les fiches des joueurs sont consultables depuis le salon et la partie.
 - Un date solo réussi ajoute sa fiche au carnet ; les dates solo déjà débloqués dans les anciens succès sont aussi récupérés, sans inventer un nombre de réussites passé. En multijoueur, Double Date débloque la partenaire de chaque joueur en cas de victoire d'équipe ; Date à 3 débloque le profil uniquement chez le gagnant ; Le Coach débloque la rencontre réussie pour les deux complices.
@@ -80,3 +80,5 @@ Les tests navigateur utilisent deux contextes Chromium indépendants et la véri
 Un Chromium installé est nécessaire. `/usr/bin/chromium` est détecté automatiquement ; sinon définir `CHROMIUM_PATH`, ou installer le navigateur Playwright avec `pnpm exec playwright-core install chromium`. `MULTIPLAYER_TEST_URL` permet de choisir l'adresse du serveur local (par défaut `http://127.0.0.1:5173`). Dans un conteneur CI nécessitant Chromium sans sandbox, lancer `CI=1 pnpm run test:multiplayer`.
 
 Le schéma `db/schema.ts` décrit `multiplayer_rooms`. La migration supplémentaire `0002_room-expiry-index.sql` ajoute un index pour le nettoyage des salons expirés, sans suppression de donnée. Pour la configuration indépendante, les migrations suivies automatiquement et les commandes de publication, suivre le [guide Cloudflare](DEPLOIEMENT_CLOUDFLARE.md). Aucun déploiement n'est réalisé par la préparation locale.
+
+Les salons expirent après 12 heures. La reprise d’un ancien salon indisponible ramène automatiquement à Créer/Rejoindre et arrête la synchronisation ; seuls les jetons de ce salon sont retirés du navigateur, jamais les contacts ni les statistiques.

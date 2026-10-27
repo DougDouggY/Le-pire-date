@@ -11,7 +11,6 @@
 @keyframes fox-meet-left{from{transform:translateX(-180px);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes fox-meet-right{from{transform:translateX(180px);opacity:0}to{transform:translateX(0);opacity:1}}
 .mp-timer{padding:12px;background:#653b29;border-radius:12px;font-variant-numeric:tabular-nums}
-.home-speedy-icon,.home-blind-icon{display:grid;place-content:center;width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#ffbf59,#e95074);font-size:26px}.home-blind-icon{background:linear-gradient(135deg,#7770ba,#313d73)}
 @media(prefers-reduced-motion:reduce){.mp-forest-player{animation:none}}
 
 #mp-player-name{text-transform:none;max-width:100%;box-sizing:border-box}.mp-forest-player{overflow-wrap:anywhere}.home-app span:last-child{overflow-wrap:anywhere}
@@ -20,3 +19,5 @@
 @keyframes fox-trot{from{translate:0 0;rotate:-3deg}to{translate:0 -7px;rotate:3deg}}
 @media(prefers-reduced-motion:reduce){.mp-meeting .mp-forest-player,.mp-meeting .mp-forest-player img{animation:none}}
 .mp-forest-player .mp-player-button{display:grid;text-align:center;gap:8px;width:100%}.mp-forest-player .mp-player-button:focus-visible{outline:2px solid #efc38c;border-radius:14px}
+
+.home-app img.foxy-mode-icon{padding:3px;object-fit:contain;background:linear-gradient(145deg,#784258,#37213d)}.mp-notice{padding:15px;border:1px solid #eac28b70;border-radius:14px;background:#453326;color:#ffe1b8;line-height:1.5}

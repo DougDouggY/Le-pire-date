@@ -4,10 +4,19 @@ const api=async(method,data)=>{const r=await fetch('/api/multiplayer',{method,he
 let room=null,poll=null,state=null,lastHeartbeat=0;
 let selectedApp='doubleDate',homeView=true;
 const animatedRooms=new Set();
-const appName=mode=>({doubleDate:'Foxy Duo',versus:'Speedy Foxy Dating',coach:'Blind Foxy'})[mode]||'Foxy Duo';
+const appName=mode=>({doubleDate:'Foxy Duo',versus:'Foxy Versus',coach:'Blind Foxy'})[mode]||'Foxy Duo';
 let generation=0, refreshing=false, sending=false;
 let lastChange=Date.now(), failures=0;
-function savedRoom(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;}}
+function savedRoom(key){try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(!saved||!/^[A-Z0-9]{8}$/.test(saved.code)||!/^[a-f0-9-]{72}$/.test(saved.token)||(saved.expiresAt&&saved.expiresAt<=Date.now())){localStorage.removeItem(key);return null;}return saved;}catch{return null;}}
+function unavailable(e){return /Salon introuvable ou expiré|Accès refusé|Jeton invalide/i.test(e?.message||'');}
+function recoverRoom(e){
+ if(!unavailable(e))return false;
+ const code=room?.code;
+ for(const key of ['lpdate-mp','lpdate-mp-recovery'])if(savedRoom(key)?.code===code)localStorage.removeItem(key);
+ room=null;state=null;generation++;clearTimeout(poll);poll=null;failures=0;home();
+ content().insertAdjacentHTML('afterbegin','<p class="mp-notice" role="status">Ce salon n’est plus disponible. Crée un nouveau salon et partage son code, ou rejoins celui de ton ami. Tes contacts et statistiques sont conservés.</p>');
+ return true;
+}
 const root=document.createElement('div');root.id='mp-overlay';root.innerHTML=`<div class="mp-shell"><header class="mp-head"><span class="mp-kicker">FOXY DUO · RENDEZ-VOUS EN LIGNE</span><button class="mp-close" aria-label="Fermer">×</button></header><main id="mp-content"></main></div>`;document.body.append(root);
 const style=document.createElement('style');style.textContent=`#mp-overlay{position:fixed;z-index:99999;inset:0;background:rgba(14,10,13,.92);backdrop-filter:blur(18px);display:none;overflow:auto;color:#f9f0ed;font-family:inherit}#mp-overlay.on{display:block}.mp-shell{width:min(900px,100%);min-height:100dvh;margin:auto;padding:clamp(16px,4vw,38px);box-sizing:border-box}.mp-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff25;padding-bottom:14px}.mp-kicker{letter-spacing:.16em;font-size:11px;color:#efb6ae}.mp-close{border:0;background:#ffffff18;color:white;border-radius:50%;width:38px;height:38px;font-size:25px;cursor:pointer}.mp-page{padding:22px 0}.mp-page h1{font-size:clamp(28px,5vw,48px);line-height:1.05;margin:8px 0 12px}.mp-page h2{margin:6px 0 10px}.mp-muted{color:#c9b9bb;line-height:1.5}.mp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:20px 0}.mp-card{background:#251b22;border:1px solid #ffffff1c;border-radius:18px;padding:17px}.mp-btn{border:0;border-radius:12px;padding:13px 16px;margin:5px 6px 5px 0;background:#f2b9ae;color:#26151b;font-weight:750;cursor:pointer}.mp-btn.secondary{background:#ffffff18;color:#fff;border:1px solid #ffffff24}.mp-btn:disabled{opacity:.45}.mp-input{background:#151115;color:white;border:1px solid #ffffff38;border-radius:11px;padding:12px;font:inherit;max-width:170px;text-transform:uppercase}.mp-code{font-size:30px;font-weight:850;letter-spacing:.22em;color:#ffd5c6}.mp-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:18px 0}.mp-mode{background:#281d25;border:1px solid #ffffff25;border-radius:15px;padding:16px;text-align:left;color:white;cursor:pointer}.mp-mode.selected{outline:2px solid #f2b9ae}.mp-people,.mp-candidates{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.mp-person{flex:1;min-width:160px;background:#241a20;border-radius:15px;padding:13px}.mp-photo{width:100%;max-height:270px;object-fit:cover;border-radius:14px}.mp-candidate{width:min(30%,180px);min-width:95px;background:#241a20;color:white;border:1px solid #ffffff30;border-radius:14px;padding:7px;cursor:pointer}.mp-candidate img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}.mp-candidate span{display:block;padding:7px 3px 3px;font-size:11px;color:#d0c1c3}.mp-scene{background:#261d24;border-radius:20px;padding:20px;margin:18px 0}.mp-question{font-size:21px;line-height:1.45}.mp-choice{display:block;width:100%;text-align:left;background:#382a34;color:white;border:1px solid #ffffff22;border-radius:13px;padding:14px;margin:9px 0;cursor:pointer;font:inherit}.mp-choice:hover{border-color:#f2b9ae}.mp-result{background:#18302a;border-radius:13px;padding:13px;margin:8px 0}.mp-chat{display:grid;grid-template-columns:1fr auto;gap:8px;margin:15px 0}.mp-chat input{width:100%;box-sizing:border-box;background:#171217;border:1px solid #ffffff30;border-radius:10px;color:white;padding:11px;font:inherit}.mp-messages{max-height:140px;overflow:auto;color:#e5d5d8;font-size:13px}.mp-error{color:#ffd1c7;background:#512d37;border-radius:10px;padding:10px;margin:12px 0}.mp-pills{display:flex;gap:8px;flex-wrap:wrap}.mp-pill{padding:7px 10px;border-radius:999px;background:#ffffff17;color:#e9d8da;font-size:12px}.mp-dossier details{background:#251b22;border-radius:12px;padding:12px;margin:8px 0}.mp-dossier summary{cursor:pointer;font-weight:bold}.mp-wait{padding:12px;color:#ffe0d4}.mp-footer{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px}@media(max-width:560px){.mp-page{padding-top:14px}.mp-grid{grid-template-columns:1fr}.mp-photo{max-height:220px}.mp-question{font-size:18px}}`;
 document.head.append(style);
@@ -33,10 +42,10 @@ function bindPeople(s){content().querySelectorAll('[data-player-role]').forEach(
  dialog.innerHTML=`<button class="mp-btn secondary" id="mp-profile-close">Fermer</button><h2>${esc(p.name)}</h2><p class="mp-muted">Profil Foxy Duo · historique de son appareil</p>${statsHtml(p.stats)}${role!==s.me?`<h3>Avec toi</h3>${statsHtml(contact?.stats)}<p class="mp-muted">${contact?.stats.cooperativeWins||0} victoires ensemble · ${contact?.stats.competitiveWins||0} victoires pour toi face à face.</p>`:''}`;
  root.append(dialog);dialog.querySelector('#mp-profile-close').onclick=()=>dialog.close();dialog.onclick=e=>{if(e.target===dialog)dialog.close();};dialog.showModal();
  });}
-function enter(r){homeView=false;generation++;lastHeartbeat=Date.now();lastChange=Date.now();failures=0;state=null;room={code:r.code,token:r.token,role:r.role};localStorage.setItem('lpdate-mp',JSON.stringify(room));}
+function enter(r){homeView=false;generation++;lastHeartbeat=Date.now();lastChange=Date.now();failures=0;state=null;room={code:r.code,token:r.token,role:r.role,expiresAt:r.expiresAt};localStorage.setItem('lpdate-mp',JSON.stringify(room));}
 function auth(){if(!room)throw Error('Rejoins ou crée un salon.');return {code:room.code,token:room.token};}
 async function send(action){
- if(sending)return;
+ if(sending||!room||homeView)return;
  const session=room, ticket=++generation;
  sending=true;
  content().querySelectorAll('button').forEach(b=>b.disabled=true);
@@ -46,6 +55,7 @@ async function send(action){
   return s;
  }catch(e){
   if(room===session&&generation===ticket){
+   if(recoverRoom(e))return null;
    // A rejected stale action should also recover the latest server state.
    try{const s=await getState();if(room===session&&generation===ticket)render(s);}catch{if(state)render(state);}
   }
@@ -58,7 +68,7 @@ async function refresh(){
  refreshing=true;
  const session=room,ticket=generation;
  try{const s=await getState();if(room===session&&generation===ticket){failures=0;if(stateSignature(s)!==stateSignature(state)){lastChange=Date.now();render(s);}else{state=s;clientReceivedAt=Date.now();}}}
- catch(e){if(room===session&&generation===ticket){failures++;fail(e);}}
+ catch(e){if(room===session&&generation===ticket){if(!recoverRoom(e)){failures++;fail(e);}}}
  finally{refreshing=false;}
 }
 // Heartbeats and clock samples are not gameplay activity: keep idle backoff.

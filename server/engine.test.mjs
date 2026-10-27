@@ -278,3 +278,9 @@ test('players rename in preparation while retaining their local identity',async(
  const renamed=await act(db,host.code,guest.token,{type:'rename',name:'Tony'});assert.equal(renamed.participants[1].name,'Tony');assert.equal(renamed.participants[1].id,before);
  await act(db,host.code,guest.token,{type:'ready',value:true});await assert.rejects(()=>act(db,host.code,guest.token,{type:'rename',name:'Autre'}),/préparer/);
 });
+
+
+test('room invitations expose the same fixed expiry to both devices',async()=>{
+ const db=new MemoryD1(),before=Date.now(),host=await createRoom(db,'versus');
+ const guest=await joinRoom(db,host.code);assert(host.expiresAt>=before+12*60*60*1000);assert.equal(guest.expiresAt,host.expiresAt);assert.equal(db.rows.get(host.code).expires_at,host.expiresAt);
+});
