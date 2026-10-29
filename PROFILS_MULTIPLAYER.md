@@ -1,10 +1,10 @@
 # Profils et rendez-vous multijoueurs
 
-Le catalogue contient exactement quatre profils par mode. Le mode solo garde ses profils et ses assets existants.
+Le catalogue contient huit profils dans Foxy Duo, organisés en quatre binômes fixes, et quatre profils dans chacun des deux autres modes. Le mode solo garde ses profils et ses assets existants.
 
 | Mode | Profils |
 | --- | --- |
-| Foxy Duo | Livia, Solène, Naïma, Iris |
+| Foxy Duo | Livia & Solène ; Naïma & Iris ; Alma & Céleste ; Jade & Maya |
 | Foxy Versus | Gabrielle, Mina, Yasmine, Émilie |
 | Blind Foxy | Dounia, Katell, Roxane, Safia |
 
@@ -14,13 +14,13 @@ Chaque profil a son propre pack d’identification : la vraie candidate, deux fe
 
 ## Assets
 
-`server/media-manifest.mjs` contient la correspondance privée des douze identités :
+`server/media-manifest.mjs` contient la correspondance privée des seize identités :
 
 - `photos` : photo principale existante puis trois scènes de vie ;
 - `actor` : anciennes photographies neutre, souriante et gênée ; la neutre reste la référence du pack d’identification ;
 - `lookalikes` : deux sosies crédibles et le leurre absurde.
 
-Les 108 images ajoutées pour les galeries et packs d’identification sont dans `public/solo/assets/mp/people/`, avec des noms opaques qui n’indiquent pas la réponse. Le décor de table `public/solo/assets/mp/table-foreground.webp` est conservé ; la nouvelle scène utilise la table du lieu pour laisser le buste entièrement visible. Les 12 planches de génération ont été contrôlées visuellement contre les portraits d’origine avant extraction et compression WebP. La vérification technique complète est :
+Les 144 images ajoutées pour les galeries et packs d’identification sont dans `public/solo/assets/mp/people/`, avec des noms opaques qui n’indiquent pas la réponse. Le décor de table `public/solo/assets/mp/table-foreground.webp` est conservé ; la nouvelle scène utilise la table du lieu pour laisser le buste entièrement visible. Les planches de génération ont été contrôlées visuellement contre les portraits d’origine avant extraction et compression WebP. La vérification technique complète est :
 
 ```bash
 node scripts/audit-profile-assets.mjs
@@ -40,7 +40,7 @@ Les scènes de chaque route reprennent une histoire, la développent et revienne
 
 ## Foxy Duo et Versus
 
-Duo propose quatre profils et laisse les deux joueurs choisir indépendamment des partenaires différentes. Les étapes de match, lieu et identification restent coordonnées. Chacun reçoit ensuite ses propres questions et réactions ; les moments de la table relient les deux récits. Une maladresse initiale peut revenir en fin de conversation et permettre une clarification. L’équipe doit réussir les deux rencontres pour gagner.
+Duo propose quatre binômes fixes (huit profils) : le premier choix propose l’autre membre du duo au second joueur, qui doit accepter. Un nouveau binôme exige l’accord des deux. Les étapes de match, lieu et identification restent coordonnées. Chacun reçoit ensuite ses propres questions et réactions ; les moments de la table relient les deux récits. Une maladresse initiale peut revenir en fin de conversation et permettre une clarification. L’équipe doit réussir les deux rencontres pour gagner.
 
 Dans Duo et Versus, la réaction reste en grand tant que les deux lecteurs n’ont pas demandé la suite. Les choix Versus simultanés restent privés avant résolution. Les actions incluent une scène ou un identifiant de réaction afin qu’un clic retardé ne saute pas une étape.
 
@@ -48,7 +48,7 @@ Les anciens scénarios et embranchements restent disponibles aux salons déjà e
 
 ## Mise en scène Foxy et humeur
 
-Les douze personnages multijoueurs possèdent chacun six sprites WebP transparents
+Les seize personnages multijoueurs possèdent chacun six sprites WebP transparents
 (neutre, sourire, très heureuse, contrariée, déçue, en colère), référencés seulement
 par `server/sprite-manifest.mjs`. Les photos du profil et des sosies restent intactes.
 Le lieu remplit l’arrière-plan ; le personnage est détouré devant le décor, et les
@@ -82,5 +82,29 @@ réserve ce parcours aux nouvelles parties, sans décaler les anciens salons.
 Le texte des questions et réponses est plus compact. Le personnage occupe la
 hauteur restante après mesure du panneau de décision, pour garder tous les choix
 visibles ensemble. La scène ne masque ni ne tronque de réponse. Les tests couvrent
-les textes des douze profils, les branches et les remarques d’arrivée, sur écran
+les textes des seize profils, les branches et les remarques d’arrivée, sur écran
 1280 × 720 et téléphones 390 × 844 et 360 × 640, en plus des parties à deux clients.
+
+
+## Binômes organisés
+
+`server/organized-duos.mjs` définit les quatre liens et les événements de table :
+Livia/Solène (anciennes collègues devenues amies), Naïma/Iris (amies du quartier),
+Alma/Céleste (sœurs fausses jumelles de 28 ans), Jade/Maya (potes de longue date).
+Chaque identité apparaît une seule fois. Les nouveaux profils ont chacun quatre
+photos, trois faux sosies et six sprites transparents, sans réutiliser une autre
+identité. Leur média est mappé dans `server/extra-duo-media.mjs` ; les routes et
+transitions sont dans `extra-duo-routes.mjs` et `extra-duo-conversation.mjs`.
+
+Le premier joueur à liker fixe le binôme, quel que soit son rôle et laquelle il
+choisit. Le serveur vérifie que le second choisit l’autre membre ; les choix
+concurrents incompatibles sont rejetés. Les cartes initiales sont au nombre de
+quatre et permettent de lire les deux profils. Une fois un binôme proposé, une
+seule partenaire reste proposée à l’autre joueur, avec une explication.
+
+`duoChange` exige deux votes avant l’identification, y compris depuis le choix du
+lieu. Une demande isolée peut être annulée et bloque les confirmations. L’accord
+mutuel conserve les villes, remet à zéro matchs et validations, et incrémente
+la révision de sélection. Les clients envoient cette révision pour rejeter les
+likes devenus obsolètes après une remise à zéro. Les nouvelles parties portent
+`paired: true` ; les salons antérieurs continuent sans forcer un nouveau choix.

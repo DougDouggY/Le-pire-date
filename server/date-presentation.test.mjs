@@ -23,7 +23,7 @@ test('every multiplayer woman has six distinct transparent sprites without chang
   }
   assert(!Object.values(sprites).includes(p.media.actor.neutral),'Do not substitute the identification reference with a new sprite');
  }
- assert.equal(paths.size,72);
+ assert.equal(paths.size,96);
 });
 
 test('all Blind Foxy venue preferences have natural clues, distinct arrival remarks and no public answer key',()=>{

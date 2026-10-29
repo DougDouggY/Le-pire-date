@@ -17,7 +17,7 @@ const c=(id,text,reply,effect)=>({id,text,reply,effect});
 const finalReplies={'coach-dounia':['« J’aime les fondants, pas qu’on en commande pour moi quand je viens de dire non. »','« Un verre ne va pas me faire plus faim. On peut simplement finir là. »'],'coach-katell':['« Pas besoin d’un trophée. C’est aussi ce que j’ai appris avec mon morceau de béton. »','« Le temps ensemble n’est pas un prélèvement à rentabiliser. »'],'coach-roxane':['« Je viens de le dire, tu n’as pas besoin d’interpréter mon silence. »','« C’est gentil, mais j’avais envie de marcher sans écouteurs. »'],'coach-safia':['« Elle a le droit de choisir ce qu’elle me raconte. Je ne veux pas lui voler ça. »','« Si j’attends d’avoir chaque date, on risque surtout de ne jamais commencer. »']};
 const endingScene=(p,prompt,good,reply,bad,miss)=>({id:`${p.id}-after-dinner`,prompt,options:[c('offer',good,reply,{connection:2,trust:1,respect:1}),c('rush',bad,finalReplies[p.id][0],{connection:-1,trust:-1}),c('miss',miss,finalReplies[p.id][1],{connection:0,respect:-1})]});
 export function installProfileDetails(content){
- for(const pool of Object.values(content))for(const p of pool.profiles){p.media=MEDIA[p.id];p.questions=questions[p.id].map(([question,answer])=>({question,answer}));}
+ for(const pool of Object.values(content))for(const p of pool.profiles){p.media=MEDIA[p.id];p.questions=questions[p.id]?.map(([question,answer])=>({question,answer}))||p.questions;}
  const preferences={
   'coach-dounia':['kebab',' Pour sortir, un comptoir vivant, du pain chaud et les manches retroussées me vont très bien.'],
   'coach-katell':['luxury',' J’ai un faible pour les belles choses, les lumières soignées et les tables d’où on voit la ville de haut.'],

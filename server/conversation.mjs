@@ -1,3 +1,4 @@
+import { EXTRA_WELCOMES, EXTRA_BRIDGES } from './extra-duo-conversation.mjs';
 // New rooms use these connected routes. Original scenes and branch IDs remain
 // intact so persisted games keep their turn indices and previous consequences.
 const welcomes={
@@ -18,7 +19,7 @@ const welcomes={
 // agreed, liked it, or proposed something they never actually chose.
 const bridges={
  'dd-livia':['La commande passée, le bruit de la rue ramène Livia à son trajet.','En parlant des sons qu’elle récolte, Livia évoque aussi le travail derrière.','Son histoire d’équipe laisse un petit silence à table.','La conversation reprend, puis le serveur vous propose une place plus calme.','Après le changement de table, vous repensez aux sons de la rue avant de partir.'],
- 'dd-solene':['La commande passée, Solène explique d’où lui vient ce réflexe de tout organiser.','Ce besoin de prévoir lui rappelle une soirée de spectacle.','En revenant à la carte, elle fait le lien entre aider et choisir à la place des autres.','La commande arrive : l’occasion de voir comment demander sans tout diriger.','L’incident réglé, Solène revient à ce qu’on peut prévoir sans enfermer l’autre.'],
+ 'dd-solene':['La commande passée, Solène explique d’où lui vient ce réflexe de tout organiser.','Ce besoin de prévoir lui rappelle une soirée de spectacle.','En revenant à la carte, elle fait le lien entre aider et choisir à la place des autres.','Le serveur vient proposer un changement de table : l’occasion de demander sans tout diriger.','Une fois réinstallés, Solène revient à ce qu’on peut prévoir sans enfermer l’autre.'],
  'dd-naima':['La commande passée, Naïma raconte le trajet qui lui a donné soif.','Le détour passait devant un local qu’elle regarde depuis plusieurs semaines.','La question du bail la ramène à ce qu’elle attend vraiment de ses proches.','Ce mot, « détour », revient quand la table parle de prolonger la soirée.','Avant de partir, Naïma revient au local et précise ce qu’elle attend de cette visite.'],
  'dd-iris':['La commande passée, Iris regarde l’heure et précise son horaire de travail.','En expliquant sa garde, elle raconte ce que ça change au retour.','De ce rythme décalé vient une question très concrète sur la possibilité de se revoir.','Pendant que vous parlez de vos horaires, la table propose de prolonger la soirée.','L’heure du départ arrive ; Iris revient au café du matin évoqué plus tôt.'],
  'vs-gabrielle':['La menthe mène aux plantes de sa cour. Gabrielle sort un plan pour expliquer son projet.','Du jardin idéal, la discussion passe à ce qui ne pousse pas comme prévu.','Cette erreur vous ramène à la question d’un jardin entretenu à plusieurs.','Parler de ce qu’elle voudrait changer dans les jardins l’amène à parler de son travail.'],
@@ -31,7 +32,7 @@ const bridges={
  'coach-safia':['La commande passée, Safia revient à la cassette évoquée avec le thé.','Ces souvenirs différents lui donnent envie d’enregistrer sa grand-mère autrement.','En cherchant un exemple de ce qu’elle aimerait garder, elle sort une photo.','Cette image imparfaite la ramène à sa difficulté à commencer sans avoir chaque détail.','Avant de partir, Safia revient au projet d’enregistrement avec une première étape possible.']
 };
 export function conversationScenes(profile,original,venue='luxury'){
- const [question,good,reply,bad,badReply,other,otherReply]=welcomes[profile.id];
+ const [question,good,reply,bad,badReply,other,otherReply]=welcomes[profile.id]||EXTRA_WELCOMES[profile.id];
  const setting=venue==='kebab'?'La carte est posée près des sauces. Vous commencez par les boissons avant de commander à manger.':venue==='arcade'?'Vous vous installez près du bar, à l’écart des bornes, et regardez les boissons.':'Vous vous installez et ouvrez la carte des boissons.';
  const option=(suffix,text,response,effect)=>({id:`${profile.id}-welcome-${suffix}`,text,reply:response,effect});
  const welcome={id:`${profile.id}-welcome`,turn:'simultaneous',prompt:`${setting} ${question}`,options:[option('ask',good,reply,{connection:2,trust:1,respect:1,group:1}),option('impose',bad,badReply,{connection:-2,trust:-1,respect:-1,group:-1}),option('miss',other,otherReply,{connection:-1,trust:-1,group:-1})]};
@@ -42,5 +43,5 @@ export function conversationScenes(profile,original,venue='luxury'){
   'advice':'Yasmine relit un texto qu’elle a réécrit huit fois et rit : « Je tourne un peu en rond avec ce message. »',
   'marée':'Vous évoquez une balade au bord de l’eau. Katell demande quand elle pourrait se faire.'
  };
- return [welcome,...original.map((scene,i)=>({...scene,transition:bridges[profile.id][i],prompt:prompts[scene.id]||scene.prompt}))];
+ return [welcome,...original.map((scene,i)=>({...scene,transition:(bridges[profile.id]||EXTRA_BRIDGES[profile.id])[i],prompt:prompts[scene.id]||scene.prompt}))];
 }

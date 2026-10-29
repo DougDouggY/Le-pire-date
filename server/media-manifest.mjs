@@ -1,3 +1,4 @@
+import { EXTRA_MEDIA } from './extra-duo-media.mjs';
 // Private server mapping: candidate image filenames contain no answer hints.
 export const MEDIA = {
   "dd-livia": {
@@ -217,3 +218,5 @@ export const MEDIA = {
     ]
   }
 };
+
+Object.assign(MEDIA, EXTRA_MEDIA);

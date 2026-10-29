@@ -1,3 +1,5 @@
+import { ORGANIZED_DUOS, EXTRA_DUO_PROFILES } from './organized-duos.mjs';
+import { installExtraDuoRoutes } from './extra-duo-routes.mjs';
 import { installProfileDetails } from './profile-details.mjs';
 import { installPersonalContent } from './personal-content.mjs';
 const c = (id, text, reply, effect, memory = null) => ({ id, text, reply, effect, memory });
@@ -132,10 +134,12 @@ export const NARRATIVE_BRANCHES = {
   ] }]
 };
 
+ddProfiles.push(...EXTRA_DUO_PROFILES);
 installPersonalContent(ddProfiles);
+installExtraDuoRoutes(ddProfiles);
 installProfileDetails({doubleDate:{profiles:ddProfiles},versus:{profiles:vsProfiles},coach:{profiles:coachProfiles}});
 
-export const CONTENT = { doubleDate: { profiles: ddProfiles, pairs: ddPairs }, versus: { profiles: vsProfiles }, coach: { profiles: coachProfiles } };
+export const CONTENT = { doubleDate: { profiles: ddProfiles, pairs: ddPairs, duos: ORGANIZED_DUOS }, versus: { profiles: vsProfiles }, coach: { profiles: coachProfiles } };
 
 export function getProfile(mode, id) { return CONTENT[mode]?.profiles.find((profile) => profile.id === id) ?? null; }
 export function getPair(id) { return ddPairs.find((pair) => pair.id === id) ?? null; }

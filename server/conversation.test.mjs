@@ -4,7 +4,7 @@ import {CONTENT} from './content.mjs';
 import {scenesFor} from './engine.mjs';
 import {conversationScenes} from './conversation.mjs';
 
-test('all twelve conversations open with an authored order and link every retained scene without replacing its choices',()=>{
+test('all sixteen conversations open with an authored order and link every retained scene without replacing its choices',()=>{
  const ids=new Set();
  for(const [mode,pool]of Object.entries(CONTENT))for(const p of pool.profiles){
   const original=p.duoScenes||p.communicationScenes||p.stories;
@@ -16,7 +16,7 @@ test('all twelve conversations open with an authored order and link every retain
   }
   const welcome=conversationScenes(p,original)[0];assert(!ids.has(welcome.id));ids.add(welcome.id);assert(welcome.options.some(o=>o.effect.connection>0));assert(welcome.options.some(o=>o.effect.connection<0));
  }
- assert.equal(ids.size,12);
+ assert.equal(ids.size,16);
 });
 
 

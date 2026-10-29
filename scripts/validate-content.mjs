@@ -4,10 +4,10 @@ import { existsSync } from 'node:fs';
 
 const ids=[];
 for(const [mode,pool] of Object.entries(CONTENT)){
- const profiles=pool.profiles;assert.equal(profiles.length,4,`${mode}: complete profile library`);
+ const profiles=pool.profiles;assert.equal(profiles.length,mode==='doubleDate'?8:4,`${mode}: complete profile library`);
  for(const p of profiles){ids.push(p.id);assert(p.age>=18,`${p.id}: adult age required`);for(const field of ['name','job','bio','face','interests','values','sensitivities','history','clues','anecdote','secret'])assert(p[field],`${p.id}: missing ${field}`);}
  if(mode==='doubleDate'){
-  assert.equal(pool.pairs.length,2);for(const p of profiles)validateScenes(p.id,p.duoScenes);
+  assert.equal(pool.pairs.length,2);assert.equal(pool.duos.length,4);assert.equal(new Set(pool.duos.flatMap(d=>d.profiles)).size,8);for(const duo of pool.duos){assert.equal(duo.profiles.length,2);assert(duo.profiles.every(id=>profiles.some(p=>p.id===id)));assert.equal(duo.moments.length,6);}for(const p of profiles)validateScenes(p.id,p.duoScenes);
   for(const pair of pool.pairs){assert(pair.profiles.every(id=>profiles.some(p=>p.id===id)),`${pair.id}: foreign profile`);validateScenes(pair.id,pair.rounds);}
  } else for(const p of profiles){validateScenes(p.id,p.scenes||p.stories);if(mode==='versus'){assert.deepEqual(p.stories.map(s=>s.turn),['simultaneous','player0','player1','simultaneous'],`${p.id}: expected simultaneous, individual, reaction, decisive turns`);}}
  for(const p of profiles){assert.equal(p.media.photos.length,4);assert.equal(p.media.lookalikes.length,3);for(const path of [...p.media.photos,...p.media.lookalikes,...Object.values(p.media.actor)])assert(existsSync('public'+path),`${p.id}: missing ${path}`);assert.equal(p.questions.length,3);if(mode==='coach')validateScenes(p.id,p.communicationScenes);}

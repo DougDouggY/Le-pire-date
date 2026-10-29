@@ -26,7 +26,7 @@ async function eventually(check,message){
  assert.fail(message);
 }
 async function open(page,name='Camille'){await page.goto(`${baseURL}/solo/index.html`);await page.click('#openMultiplayer');if(await page.locator('#mp-player-name').count())await page.fill('#mp-player-name',name);}
-async function createPair(browser,mode,names=['Alex','Robin'],venueChoice='preferred'){
+async function createPair(browser,mode,names=['Alex','Robin'],venueChoice='preferred',duoId=null,exerciseChange=false,memberId=null){
  const contexts=await Promise.all([browser.newContext({viewport:{width:390,height:844}}),browser.newContext({viewport:{width:1280,height:720}})]);
  const pages=await Promise.all(contexts.map(c=>c.newPage()));
  for(const page of pages){
@@ -45,21 +45,34 @@ async function createPair(browser,mode,names=['Alex','Robin'],venueChoice='prefe
  assert.match(await pages[1].locator('.fox-1').textContent(),/Joueur 2 · toi/);
  for(const [role,page] of pages.entries())await page.fill('#mp-player-name',names[role]);
  await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
- if(mode==='doubleDate')await prepareDoubleDate(pages);
+ if(mode==='doubleDate')await prepareDoubleDate(pages,duoId,exerciseChange,memberId);
  if(mode==='coach'){await pages[1].locator('.mp-reference-portrait').waitFor();const guide=await view(pages[1]);const p=CONTENT.coach.profiles.find(p=>p.name===guide.dossier.name);const venue=venueChoice==='wrong'?['luxury','kebab','arcade'].find(v=>v!==p.venuePreference):p.venuePreference;await pages[0].locator(`[data-blind-venue="${venue}"]`).click();}
  await pages[0].locator('.mp-candidates').waitFor();await pages[1].locator(mode==='coach'?'.mp-reference-portrait':'.mp-candidates').waitFor();
  return {contexts,pages};
 }
-async function prepareDoubleDate(pages){
+async function prepareDoubleDate(pages,duoId=null,exerciseChange=false,memberId=null){
+ const selectDuo=async()=>{if(!duoId)return;const target=CONTENT.doubleDate.duos.find(d=>d.id===duoId);for(let i=0;i<4;i++){const id=await pages[0].locator('#mp-like-profile').getAttribute('data-profile');if(target.profiles.includes(id))return;await pages[0].click('#mp-pass-profile');}throw Error('Duo card not found');};
  for(const [role,page] of pages.entries()){
   await page.locator('#mp-city').waitFor();await page.fill('#mp-city',role?'Lyon':'Paris');await page.click('#mp-city-next');await page.locator('#mp-like-profile').waitFor();
  }
+ if(!exerciseChange)await selectDuo();if(memberId)await pages[0].click(`[data-duo-person="${memberId}"]`);
  await pages[0].click('#mp-view-profile');await pages[0].locator('.mp-profile-prompt').first().waitFor();assert.equal(await pages[0].locator('.mp-profile-prompt').count(),3);await pages[0].click('[data-gallery-next]');await pages[0].click('#mp-profile-back');
- const first=await pages[0].locator('#mp-like-profile').getAttribute('data-profile');
- const before=(await view(pages[1])).foxy.profiles.map(p=>p.id);assert.equal(before.length,4);assert(before.includes(first));
+ let first=await pages[0].locator('#mp-like-profile').getAttribute('data-profile');
+ const before=(await view(pages[1])).foxy.profiles;assert.equal(before.length,4);assert(before.some(p=>p.duo.members.some(m=>m.id===first)));
  await pages[0].click('#mp-like-profile');await pages[0].locator('[data-foxy-step="waiting"]').waitFor();
- await eventually(async()=>(await view(pages[1])).foxy.profiles.length===3,'Other player lost independent choices');
- const counterpart=await pages[1].locator('#mp-like-profile').getAttribute('data-profile');assert.notEqual(counterpart,first);
+ await eventually(async()=>(await view(pages[1])).foxy.profiles.length===1,'Partner did not receive the fixed counterpart');
+ if(exerciseChange){
+  await pages[1].locator('[data-duo-change="true"]').click();
+  await eventually(async()=>(await view(pages[0])).foxy.changeVotes[1],'Change proposal was not synchronized');
+  assert.equal((await view(pages[0])).foxy.profiles.length,1,'One change vote reset the duo');
+  await pages[1].reload();await pages[1].click('#openMultiplayer');await pages[1].click('#mp-resume');await pages[1].locator('[data-duo-change="false"]').waitFor();
+  await pages[0].locator('[data-duo-change="true"]').click();
+  await eventually(async()=>(await view(pages[0])).foxy.profiles.length===4&&(await view(pages[1])).foxy.profiles.length===4,'Two votes did not restore the four duos');
+  await pages[0].locator('#mp-like-profile').waitFor();await selectDuo();first=await pages[0].locator('#mp-like-profile').getAttribute('data-profile');await pages[0].click('#mp-like-profile');
+  await eventually(async()=>(await view(pages[1])).foxy.profiles.length===1,'New counterpart was not synchronized');
+ }
+
+ const counterpart=(await view(pages[1])).foxy.profiles[0].id;assert.notEqual(counterpart,first);assert(CONTENT.doubleDate.duos.some(d=>d.profiles.includes(first)&&d.profiles.includes(counterpart)));await pages[1].locator('.mp-duo-proposal').waitFor();
  await pages[1].locator(`#mp-like-profile[data-profile="${counterpart}"]`).waitFor();await pages[1].click('#mp-like-profile');
  assert.equal((await view(pages[1])).stage,'foxy');
  await pages[0].click('#mp-confirm-match');assert.equal((await view(pages[0])).stage,'foxy');await pages[1].click('#mp-confirm-match');
@@ -347,5 +360,24 @@ test('all profile questions and three choices fit together across desktop and ph
     await choicesFit(page);
    }
   }
+ }finally{await browser.close();}
+});
+
+
+for(const duoId of ['duo-quartier','duo-soeurs','duo-musee'])test(`organized ${duoId}: two browsers finish their linked dates`,{timeout:240000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const {pages}=await createPair(browser,'doubleDate',['Alex','Robin'],'preferred',duoId,duoId==='duo-musee');
+  const duo=CONTENT.doubleDate.duos.find(d=>d.id===duoId);const states=await Promise.all(pages.map(view));
+  assert.deepEqual(states.map(s=>s.profiles[0].id),duo.profiles);for(const page of pages)assert.equal(await page.locator('[data-seat]').count(),4);
+  await identify(pages,'doubleDate');await play(pages,'doubleDate','win');for(const page of pages)assert.deepEqual(page.errors,[]);
+ }finally{await browser.close();}
+});
+
+
+test('organized duo-studio mirrored: either player can choose either friend',{timeout:240000},async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{const {pages}=await createPair(browser,'doubleDate',['Alex','Robin'],'preferred','duo-studio',false,'dd-solene');
+  assert.equal((await view(pages[0])).profiles[0].id,'dd-solene');assert.equal((await view(pages[1])).profiles[0].id,'dd-livia');await identify(pages,'doubleDate');await play(pages,'doubleDate','win');for(const page of pages)assert.deepEqual(page.errors,[]);
  }finally{await browser.close();}
 });

@@ -1,3 +1,4 @@
+import { EXTRA_SPRITES } from './extra-duo-media.mjs';
 // Private mapping of cutout sprites; no score or candidate answer keys.
 export const SPRITES = {
   "dd-livia": {
@@ -97,3 +98,5 @@ export const SPRITES = {
     "angry": "/solo/assets/mp/people/1185fcaefe92b2d410.webp"
   }
 };
+
+Object.assign(SPRITES, EXTRA_SPRITES);

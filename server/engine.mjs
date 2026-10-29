@@ -14,7 +14,7 @@ function facePath(profile){ const pool=CONTENT[profile.mode]?.profiles||[]; cons
 function buildMatch(mode, excluded=null){
  const content=CONTENT[mode];
  if(mode==='doubleDate'){
-  const pairs=content.pairs.filter(x=>x.id!==excluded);const pair=pick(pairs.length?pairs:content.pairs); return {id:crypto.randomUUID(),presentation:2,conversation:1,personal:true,ownReplies:[null,null],nextReady:[false,false],stage:'foxy',setup:{cities:['',''],liked:[false,false],confirmed:[false,false],pairId:null,profileIds:[null,null],venueVotes:[null,null],venueConfirmed:[false,false]},mode,kind:pair.id, pair:{title:pair.title,relation:pair.relation,opening:pair.opening,profiles:pair.profiles.map(id=>getProfile(mode,id).id)}, round:0, picks:{}, scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}], group:0, memories:[], done:false};
+  const pairs=content.pairs.filter(x=>x.id!==excluded);const pair=pick(pairs.length?pairs:content.pairs); return {id:crypto.randomUUID(),presentation:2,conversation:1,paired:true,personal:true,ownReplies:[null,null],nextReady:[false,false],stage:'foxy',setup:{cities:['',''],liked:[false,false],confirmed:[false,false],pairId:null,profileIds:[null,null],venueVotes:[null,null],venueConfirmed:[false,false]},mode,kind:pair.id, pair:{title:pair.title,relation:pair.relation,opening:pair.opening,profiles:pair.profiles.map(id=>getProfile(mode,id).id)}, round:0, picks:{}, scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}], group:0, memories:[], done:false};
  }
  const candidates=content.profiles.filter(x=>x.id!==excluded);const p=pick(candidates.length?candidates:content.profiles); return {id:crypto.randomUUID(),presentation:2,conversation:1,chooseVenue:mode==='coach',stage:mode==='coach'?'venue':'identification',mode,profileId:p.id,round:0,picks:{},scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}],memories:[],done:false};
 }
@@ -25,7 +25,7 @@ export function scenesFor(match,role=0){
  else{p=getProfile(match.mode,match.profileId);original=match.mode==='coach'&&match.presentation===2?p.communicationScenes:p.scenes||p.stories||[];}
  return match.conversation?conversationScenes(p,original,match.venue?.id):original;
 }
-function sceneFor(match,role=0){let scene=scenesFor(match,role)[match.round];if(!scene)return null;if(match.personal&&match.round===scenesFor(match,role).length-1&&match.memories.some(m=>m.role===role&&m.tag===`${match.pair.profiles[role]}-rushed-0`)){const callbacks={'dd-livia':'Avant de parler de se revoir, Livia revient sur le début : « Quand je parlais des sons de la ville, tu voulais surtout les couper. Tu aurais envie de découvrir ce que j’entends ? »','dd-solene':'Solène revient sur votre arrivée : « Tu voulais prendre le contrôle pour que je me détende. Si on se revoit, on pourrait essayer de choisir à deux ? »','dd-naima':'Naïma reprend ton commentaire sur son détour : « Mon trajet n’était pas une erreur. Tu aurais quand même envie de venir regarder cet atelier avec moi ? »','dd-iris':'Iris regarde l’heure : « Tu voulais que je reste plus longtemps pour toi. Ce café du matin, tu pourrais le prendre comme un vrai rendez-vous ? »'};scene={...scene,prompt:callbacks[match.pair.profiles[role]],options:scene.options.map(o=>o.id.endsWith('-listen')?{...o,reply:'« Merci de revenir sur ce qu’on a dit. » '+o.reply}:o)};}const key=`${match.mode==='doubleDate'?(match.personal?match.pair.profiles[role]:match.kind):match.profileId}:${scene.id}`;const branch=(NARRATIVE_BRANCHES[key]||[]).find(x=>match.memories.some(m=>m.tag===x.memory&&(!match.personal||m.role===role)));return branch?{...scene,prompt:branch.prompt,options:branch.options}:scene;}
+function sceneFor(match,role=0){let scene=scenesFor(match,role)[match.round];if(!scene)return null;if(match.personal&&match.round===scenesFor(match,role).length-1&&match.memories.some(m=>m.role===role&&m.tag===`${match.pair.profiles[role]}-rushed-0`)){const callbacks={'dd-livia':'Avant de parler de se revoir, Livia revient sur le début : « Quand je parlais des sons de la ville, tu voulais surtout les couper. Tu aurais envie de découvrir ce que j’entends ? »','dd-solene':'Solène revient sur votre arrivée : « Tu voulais prendre le contrôle pour que je me détende. Si on se revoit, on pourrait essayer de choisir à deux ? »','dd-naima':'Naïma reprend ton commentaire sur son détour : « Mon trajet n’était pas une erreur. Tu aurais quand même envie de venir regarder cet atelier avec moi ? »','dd-iris':'Iris regarde l’heure : « Tu voulais que je reste plus longtemps pour toi. Ce café du matin, tu pourrais le prendre comme un vrai rendez-vous ? »'};scene={...scene,prompt:callbacks[match.pair.profiles[role]]||scene.prompt,options:scene.options.map(o=>o.id.endsWith('-listen')?{...o,reply:'« Merci de revenir sur ce qu’on a dit. » '+o.reply}:o)};}const key=`${match.mode==='doubleDate'?(match.personal?match.pair.profiles[role]:match.kind):match.profileId}:${scene.id}`;const branch=(NARRATIVE_BRANCHES[key]||[]).find(x=>match.memories.some(m=>m.tag===x.memory&&(!match.personal||m.role===role)));return branch?{...scene,prompt:branch.prompt,options:branch.options}:scene;}
 function applyEffect(score,effect,difficulty='normal'){for(const [k,v] of Object.entries(effect||{})){const key=({judgment:'respect',truth:'trust',accountability:'trust',empathy:'care',connection2:'connection'})[k]||k;const scale=difficulty==='difficile'&&v<0?1.5:difficulty==='facile'&&v>0?1.25:1;if(key in score)score[key]+=Math.sign(v)*Math.ceil(Math.abs(v)*scale);}}
 function beatsNone(value,difficulty){return value>=({facile:0,normal:2,difficile:4}[difficulty]??2);}
 function versusValue(s){return s.connection+s.trust*1.5+s.respect+s.curiosity*.5+s.consistency*.5+s.care*.5;}
@@ -47,7 +47,7 @@ function candidateSet(profile, mode){
 function initializeSeats(m){
  if(m.mode==='doubleDate'&&m.personal){m.seats=m.pair.profiles.map(id=>candidateSet(getProfile('doubleDate',id),'doubleDate'));
  }else if(m.mode==='doubleDate'){
-  const shared=CONTENT.doubleDate.profiles.map(p=>({key:`seat-${crypto.randomUUID().slice(0,8)}`,image:facePath(p),cue:p.face.cue,target:false}));
+  const shared=CONTENT.doubleDate.profiles.slice(0,4).map(p=>({key:`seat-${crypto.randomUUID().slice(0,8)}`,image:facePath(p),cue:p.face.cue,target:false}));
   m.seats=m.pair.profiles.map(id=>shared.map(seat=>({...seat,target:seat.image===facePath(getProfile('doubleDate',id))})));
  }else m.seats=candidateSet(getProfile(m.mode,m.profileId),m.mode);
  m.stage='identification';
@@ -63,6 +63,13 @@ function successDates(room){
 function setupState(room,role){
  const m=room.match,setup=m.setup;
  if(m.mode!=='doubleDate'||!setup||!['foxy','venue'].includes(m.stage))return null;
+ if(m.personal&&m.paired){
+  const selected=CONTENT.doubleDate.duos.find(d=>d.id===setup.pairId);
+  const duoCard=(duo,id)=>{const members=duo.profiles.map(id=>{const p=getProfile('doubleDate',id);return {...publicProfile(p,true),photo:facePath(p)};});return {...members.find(p=>p.id===id),duo:{id:duo.id,names:duo.names,relation:duo.relation,members}};};
+  const expected=selected?.profiles.find(id=>id!==setup.profileIds[1-role]);
+  const cards=selected?[duoCard(selected,setup.profileIds[role]||expected)]:CONTENT.doubleDate.duos.map(d=>duoCard(d,d.profiles[role]));
+  return {stage:m.stage,matchId:m.id,foxy:{city:setup.cities[role],liked:setup.liked[role],partnerLiked:setup.liked[1-role],confirmed:setup.confirmed?.[role]||false,step:!setup.cities[role]?'location':setup.liked[role]?'waiting':'profiles',profiles:cards,locked:!!selected,revision:setup.revision||0,changeVotes:setup.changeVotes||[false,false],proposal:selected?{names:selected.names,relation:selected.relation,chosenName:getProfile('doubleDate',setup.profileIds[1-role]||setup.profileIds[role]).name,expectedName:getProfile('doubleDate',setup.profileIds[role]||expected).name}:null},venues:VENUES,venueVotes:setup.venueVotes,venueConfirmed:setup.venueConfirmed||[false,false]};
+ }
  if(m.personal){const ids=setup.profileIds;const all=CONTENT.doubleDate.profiles;let deck=setup.liked[role]?all.filter(p=>p.id===ids[role]):all.filter(p=>p.id!==ids[1-role]);if(role===1&&!setup.liked[role])deck=deck.slice(2).concat(deck.slice(0,2));return {stage:m.stage,matchId:m.id,foxy:{city:setup.cities[role],liked:setup.liked[role],partnerLiked:setup.liked[1-role],confirmed:setup.confirmed?.[role]||false,step:!setup.cities[role]?'location':setup.liked[role]?'waiting':'profiles',profiles:deck.map(p=>({id:p.id,...publicProfile(p,true),photo:facePath(p)}))},venues:VENUES,venueVotes:setup.venueVotes,venueConfirmed:setup.venueConfirmed||[false,false]};}
  const pairs=CONTENT.doubleDate.pairs.filter(p=>!setup.pairId||p.id===setup.pairId);
  return {stage:m.stage,matchId:m.id,foxy:{city:setup.cities[role],liked:setup.liked[role],partnerLiked:setup.liked[1-role],confirmed:setup.confirmed?.[role]||false,step:!setup.cities[role]?'location':setup.liked[role]?'waiting':'profiles',profiles:pairs.map(pair=>{const p=getProfile('doubleDate',pair.profiles[role]);return {id:p.id,...publicProfile(p,true),photo:facePath(p)};})},venues:VENUES,venueVotes:setup.venueVotes,venueConfirmed:setup.venueConfirmed||[false,false]};
@@ -91,7 +98,7 @@ export function publicState(room, role){
   seats:(mode==='coach'&&role===1?null:mode==='doubleDate'?m.seats?.[role]:m.seats)?.map(({key,image,cue})=>room.difficulty==='facile'?{key,image,cue}:{key,image})||null,
  };
  if(mode==='doubleDate'){
-  if(m.personal){const scene=sceneFor(m,role),p=getProfile(mode,m.pair.profiles[role]),reply=m.ownReplies?.[role];return {...base,...identification,sharedMoment:m.conversation&&m.round===0?'La table s’installe. Chacun prend le temps de choisir sa boisson.':SHARED_MOMENTS[Math.min(m.round-(m.conversation?1:0),4)],profiles:[{...publicProfile(p,room.difficulty==='facile'),photo:facePath(p),mine:true}],round:Math.min(m.round+1,scenesFor(m,role).length),total:scenesFor(m,role).length,scene:scene?{id:scene.id,prompt:scene.prompt,transition:scene.transition||null,options:scene.options.map(o=>({id:o.id,text:o.text}))}:null,selected:!!m.picks[role],reaction:reply?{id:scene.id,ready:!!m.nextReady[role],both:!!m.picks[1-role]}:null,lastReveal:reply?[reply]:[],ending:m.done?m.ending:null,personal:true};}
+  if(m.personal){const scene=sceneFor(m,role),p=getProfile(mode,m.pair.profiles[role]),reply=m.ownReplies?.[role];return {...base,...identification,sharedMoment:m.paired&&CONTENT.doubleDate.duos.find(d=>d.id===m.setup?.pairId)?.moments?.[m.round]|| (m.conversation&&m.round===0?'La table s’installe. Chacun prend le temps de choisir sa boisson.':SHARED_MOMENTS[Math.min(m.round-(m.conversation?1:0),4)]),profiles:[{...publicProfile(p,room.difficulty==='facile'),photo:facePath(p),mine:true}],round:Math.min(m.round+1,scenesFor(m,role).length),total:scenesFor(m,role).length,scene:scene?{id:scene.id,prompt:scene.prompt,transition:scene.transition||null,options:scene.options.map(o=>({id:o.id,text:o.text}))}:null,selected:!!m.picks[role],reaction:reply?{id:scene.id,ready:!!m.nextReady[role],both:!!m.picks[1-role]}:null,lastReveal:reply?[reply]:[],ending:m.done?m.ending:null,personal:true};}
   const pair=getPair(m.kind), scene=sceneFor(m);
   return {...base,...identification, pair:{title:pair.title,relation:pair.relation,opening:pair.opening}, profiles:m.pair.profiles.map((id,i)=>{const p=getProfile(mode,id);return {...publicProfile(p,room.difficulty==='facile'),photo:facePath(p),mine:i===role}}),round:Math.min(m.round+1,pair.rounds.length),total:pair.rounds.length,scene:scene?{id:scene.id,prompt:scene.prompt,transition:scene.transition||null,options:scene.options.map(o=>({id:o.id,text:o.text}))}:null,selected:Object.keys(m.picks).includes(String(role)),revealed:null,lastReveal:m.lastReveal||null,ending:m.done?m.ending:null};
  }
@@ -154,27 +161,40 @@ async function actOnce(db,roomCode,bearer,action){
   const p=getProfile('coach',m.profileId);applyEffect(m.scores[0],p.venuePreference===venue.id?{connection:1}:{connection:-1},room.difficulty);initializeSeats(m);
   await save(db,row,room);return publicState(room,role);
  }
+ if(action.type==='duoChange'){
+  const m=room.match;if(room.phase!=='playing'||!m?.paired||!['foxy','venue'].includes(m.stage)||!m.setup.pairId)throw Error('Changement de duo indisponible');
+  const setup=m.setup;if(action.duoRevision!==undefined&&action.duoRevision!==(setup.revision||0))throw Error('La sélection a changé, regarde les duos proposés');setup.changeVotes??=[false,false];setup.changeVotes[role]=action.value!==false;
+  if(setup.changeVotes.every(Boolean)){setup.pairId=null;setup.profileIds=[null,null];setup.liked=[false,false];setup.confirmed=[false,false];setup.venueVotes=[null,null];setup.venueConfirmed=[false,false];setup.changeVotes=[false,false];setup.revision=(setup.revision||0)+1;m.stage='foxy';delete m.venue;}
+  await save(db,row,room);return publicState(room,role);
+ }
  if(['location','likeProfile','confirmMatch','venue','confirmVenue'].includes(action.type)){
   const m=room.match;
   if(room.phase!=='playing'||m?.mode!=='doubleDate'||!m.setup)throw Error('Préparation indisponible');
-  const setup=m.setup;
+  const setup=m.setup;if(m.paired&&action.duoRevision!==undefined&&action.duoRevision!==(setup.revision||0))throw Error('La sélection a changé, regarde les duos proposés');
   if(action.type==='location'){
    if(m.stage!=='foxy'||setup.liked[role])throw Error('Localisation déjà validée');
    const city=typeof action.city==='string'?action.city.trim().slice(0,48):'';
    if(!city)throw Error('Indique ta ville');setup.cities[role]=city;
   }else if(action.type==='likeProfile'){
    if(m.stage!=='foxy'||!setup.cities[role]||setup.liked[role])throw Error('Profil indisponible');
-   if(m.personal){const p=getProfile('doubleDate',action.profileId);if(!p||setup.profileIds[1-role]===p.id)throw Error('Ce profil vient de matcher avec ton ami. Choisis une autre rencontre.');setup.profileIds[role]=p.id;setup.liked[role]=true;m.pair.profiles[role]=p.id;m.pair.relation='Deux conversations, une table à quatre.';m.pair.opening=SHARED_MOMENTS[0];}
+   if(m.personal&&m.paired){
+    if(action.duoRevision!==undefined&&action.duoRevision!==(setup.revision||0))throw Error('La sélection a changé, regarde les duos proposés');
+    const duo=CONTENT.doubleDate.duos.find(d=>d.profiles.includes(action.profileId));if(!duo)throw Error('Duo indisponible');
+    if(setup.pairId&&(setup.pairId!==duo.id||setup.profileIds[1-role]===action.profileId))throw Error('Ton partenaire a choisi un duo : sélectionne son autre membre, ou changez ensemble');
+    setup.pairId=duo.id;setup.profileIds[role]=action.profileId;setup.liked[role]=true;
+    const ordered=[...duo.profiles];if(ordered[role]!==action.profileId)ordered.reverse();m.kind=duo.id;m.pair={title:duo.names,relation:duo.relation,opening:duo.opening,profiles:ordered};
+   }
+   else if(m.personal){const p=getProfile('doubleDate',action.profileId);if(!p||setup.profileIds[1-role]===p.id)throw Error('Ce profil vient de matcher avec ton ami. Choisis une autre rencontre.');setup.profileIds[role]=p.id;setup.liked[role]=true;m.pair.profiles[role]=p.id;m.pair.relation='Deux conversations, une table à quatre.';m.pair.opening=SHARED_MOMENTS[0];}
    else{const pair=CONTENT.doubleDate.pairs.find(p=>p.profiles[role]===action.profileId&&(!setup.pairId||p.id===setup.pairId));
    if(!pair)throw Error('Ton partenaire a trouvé un autre binôme compatible. Regarde le profil proposé.');
    setup.pairId=pair.id;m.kind=pair.id;m.pair={title:pair.title,relation:pair.relation,opening:pair.opening,profiles:pair.profiles};setup.liked[role]=true;}
    // Both players explicitly confirm their match before moving together.
   }else if(action.type==='confirmMatch'){
-   if(m.stage!=='foxy'||!setup.liked[role])throw Error('Trouve ton match avant de confirmer');
+   if(m.stage!=='foxy'||!setup.liked[role])throw Error('Trouve ton match avant de confirmer');if(setup.changeVotes?.some(Boolean))throw Error('Répondez à la demande de changement avant de confirmer');
    setup.confirmed??=[false,false];setup.confirmed[role]=true;
    if(setup.confirmed.every(Boolean))m.stage='venue';
   }else if(action.type==='confirmVenue'){
-   if(m.stage!=='venue'||!setup.venueVotes[role])throw Error('Choisis un lieu avant de confirmer');
+   if(m.stage!=='venue'||!setup.venueVotes[role])throw Error('Choisis un lieu avant de confirmer');if(setup.changeVotes?.some(Boolean))throw Error('Répondez à la demande de changement avant de confirmer');
    setup.venueConfirmed??=[false,false];setup.venueConfirmed[role]=true;
    if(setup.venueConfirmed.every(Boolean)&&setup.venueVotes.every(v=>v===setup.venueVotes[0])){m.venue=VENUES.find(v=>v.id===setup.venueVotes[0]);initializeSeats(m);}
   }else{
