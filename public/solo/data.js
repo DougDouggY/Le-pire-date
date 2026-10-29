@@ -2,7 +2,7 @@ window.DD_DATA = {
   venues: [
     {id:'luxury',name:'Le Belvédère',address:'au dernier étage, vue sur la ville',image:'./assets/venue-rooftop.webp?v=30',tag:'grand luxe · vue panoramique'},
     {id:'kebab',name:'Le Kebab du Destin',address:'à deux rues du centre',image:'./assets/kebab-night.webp?v=30',tag:'quartier · sauce blanche'},
-    {id:'arcade',name:'La Salle Bonus',address:'dans une ancienne salle de jeux',image:'./assets/venue-retro-arcade.webp?v=30',tag:'néons · flippers · revanche'}
+    {id:'arcade',name:'La Salle de Billard',address:'près du comptoir et des tapis verts',image:'./assets/mp/billiards-table.webp',tag:'tapis vert · comptoir · revanche'}
   ],
   achievements: [
     {id:'date-lea',icon:'📸',title:'Le déclic argentique',condition:'Réussir le rendez-vous avec Léa.',phrase:'Une belle rencontre, sans filtre et sans flash dans les yeux.',rule:'profile_win',profile:'lea'},
@@ -15,7 +15,7 @@ window.DD_DATA = {
     {id:'nora-plants',icon:'🪴',title:'Main verte, langue acide',condition:'Critiquer les plantes de Nora sur ses deux questions dédiées et réussir le date.',phrase:'Les plantes ont pris cher. La relation, étonnamment, a survécu.',rule:'nora_plants'},
     {id:'perfect-date',icon:'✨',title:'Sans une fausse note',condition:'Réussir un date sans mauvaise réponse ni erreur de table.',phrase:'Pas un faux pas. Même le serveur n’en revient pas.',rule:'perfect'},
     {id:'nora-trap',icon:'🪤',title:'Confusion consentie',condition:'Choisir le sosie complice de Nora quand tu cherches sa table.',phrase:'Tu t’es trompé de Nora. Et c’était exactement la bonne réponse.',rule:'nora_trap'},
-    {id:'arcade-date',icon:'🕹️',title:'Continue ?',condition:'Réussir un date à La Salle Bonus.',phrase:'Le rendez-vous était déjà une partie bonus.',rule:'venue_win',venue:'arcade'},
+    {id:'arcade-date',icon:'🎱',title:'La belle ?',condition:'Réussir un date à La Salle de Billard.',phrase:'La soirée mérite une revanche.',rule:'venue_win',venue:'arcade'},
     {id:'luxury-date',icon:'🥂',title:'Addition à trois chiffres',condition:'Réussir un date au Belvédère.',phrase:'Les lumières du Belvédère ont fait leur effet. Ton compte en banque s’en souviendra.',rule:'venue_win',venue:'luxury'},
     {id:'phone-pro',icon:'📵',title:'Téléphone en mode galet',condition:'Réussir un date sans consulter Foxy pendant le rendez-vous.',phrase:'Tu as regardé la personne en face. Révolutionnaire.',rule:'no_phone'}
   ],

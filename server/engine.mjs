@@ -1,3 +1,4 @@
+import { storyScenes, storyAction, storyProjection, invitationFor, introStory, storyTimeout } from './romcom-engine.mjs';
 import { revisedImage } from './image-revisions.mjs';
 import { conversationScenes } from './conversation.mjs';
 import { arrivalFor, moodFor, SPRITES } from './date-presentation.mjs';
@@ -15,11 +16,12 @@ function facePath(profile){ if(profile.media?.photos?.[0])return profile.media.p
 function buildMatch(mode, excluded=null){
  const content=CONTENT[mode];
  if(mode==='doubleDate'){
-  const pairs=content.pairs.filter(x=>x.id!==excluded);const pair=pick(pairs.length?pairs:content.pairs); return {id:crypto.randomUUID(),presentation:2,conversation:1,paired:true,personal:true,ownReplies:[null,null],nextReady:[false,false],stage:'foxy',setup:{cities:['',''],liked:[false,false],confirmed:[false,false],pairId:null,profileIds:[null,null],venueVotes:[null,null],venueConfirmed:[false,false]},mode,kind:pair.id, pair:{title:pair.title,relation:pair.relation,opening:pair.opening,profiles:pair.profiles.map(id=>getProfile(mode,id).id)}, round:0, picks:{}, scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}], group:0, memories:[], done:false};
+  const pairs=content.pairs.filter(x=>x.id!==excluded);const pair=pick(pairs.length?pairs:content.pairs); return {id:crypto.randomUUID(),presentation:2,conversation:1,story:1,paired:true,personal:true,ownReplies:[null,null],nextReady:[false,false],stage:'foxy',setup:{cities:['',''],liked:[false,false],confirmed:[false,false],pairId:null,profileIds:[null,null],venueVotes:[null,null],venueConfirmed:[false,false]},mode,kind:pair.id, pair:{title:pair.title,relation:pair.relation,opening:pair.opening,profiles:pair.profiles.map(id=>getProfile(mode,id).id)}, round:0, picks:{}, scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}], group:0, memories:[], done:false};
  }
- const candidates=content.profiles.filter(x=>x.id!==excluded);const p=pick(candidates.length?candidates:content.profiles); return {id:crypto.randomUUID(),presentation:2,conversation:1,chooseVenue:mode==='coach',stage:mode==='coach'?'venue':'identification',mode,profileId:p.id,round:0,picks:{},scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}],memories:[],done:false};
+ const candidates=content.profiles.filter(x=>x.id!==excluded);const p=pick(candidates.length?candidates:content.profiles); return {id:crypto.randomUUID(),presentation:2,conversation:1,story:1,chooseVenue:true,stage:'venue',mode,profileId:p.id,round:0,picks:{},scores:[{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0},{connection:0,trust:0,respect:0,curiosity:0,consistency:0,care:0}],memories:[],done:false};
 }
 export function scenesFor(match,role=0){
+ if(match.story)return storyScenes(match,role);
  let original,p;
  if(match.mode==='doubleDate'&&match.personal){p=getProfile('doubleDate',match.pair.profiles[role]);original=p.duoScenes;}
  else if(match.mode==='doubleDate')return getPair(match.kind).rounds;
@@ -56,6 +58,7 @@ function initializeSeats(m){
 function successDates(room){
  const m=room.match;
  const contact=p=>({id:p.id,name:p.name,photo:facePath(p)});
+ if(m.mode==='doubleDate'&&m.story)return m.pair.profiles.map((id,r)=>m.individual?.[r]==='interested'?[contact(getProfile('doubleDate',id))]:[]);
  if(m.mode==='doubleDate')return m.successful?m.pair.profiles.map(id=>[contact(getProfile('doubleDate',id))]):[[],[]];
  const p=contact(getProfile(m.mode,m.profileId));
  if(m.mode==='coach')return m.winner===0?[[p],[p]]:[[],[]];
@@ -87,10 +90,12 @@ export function publicState(room, role){
   const p=getProfile(mode,mode==='doubleDate'?m.pair.profiles[role]:m.profileId),reply=m.personal?m.ownReplies?.[role]:m.reaction?m.lastReveal?.find(r=>r.role===role)||m.lastReveal?.[0]:null;
   const mood=moodFor(m.scores[mode==='coach'?0:role]);const sprites=SPRITES[p.id];
   base.actor={name:p.name,photo:sprites?.[mood]||p.media.actor.neutral,mood,transient:reply?{id:`${m.id}:${m.round}:${reply.option||'timeout'}`,photo:sprites?.[reply.tone==='warm'?'delighted':'displeased']||p.media.actor[reply.tone]||p.media.actor.neutral}:null};
-  if(m.round===0&&!reply)base.arrivalNotice=arrivalFor(p,m.venue?.id,m.identification?.[role]===false);
+  if(m.round===0&&!reply)base.arrivalNotice=arrivalFor(p,m.story?undefined:m.venue?.id,m.identification?.[role]===false);
  }
 
  base.result=m.done&&m.result?{...m.result,dates:m.result.dates[role]||[]}:null;
+ const story=m.story?storyProjection(room,role):null;if(story)return {...base,...story};
+ if(m.story&&mode==='versus'&&m.stage==='venue')return {...base,stage:'venue',venues:VENUES,venueVotes:m.venueVotes||[null,null],venueConfirmed:m.venueConfirmed||[false,false],scene:null};
  const preparation=setupState(room,role);if(preparation)return {...base,...preparation};
  if(mode==='coach'&&m.stage==='venue')return role===1?{...base,stage:'venue',roleView:'coach',dossier:coachDossier(getProfile(mode,m.profileId)),targetImage:facePath(getProfile(mode,m.profileId)),scene:null,lastReveal:[],reaction:null,deadline:null,seats:null}:{...base,stage:'venue',venues:VENUES,scene:null,seats:null};
  const identification={
@@ -129,10 +134,10 @@ export async function readRoom(db, roomCode, bearer, attempt=0){
  const row=await db.prepare('SELECT * FROM multiplayer_rooms WHERE code=? AND expires_at>?').bind(roomCode,Date.now()).first(); if(!row) throw Error('Salon introuvable ou expiré');
  let role=-1; if(await hash(bearer)===row.host_token_hash) role=0; else if(row.guest_token_hash&&await hash(bearer)===row.guest_token_hash) role=1; else throw Error('Accès refusé');
  const room=JSON.parse(row.state_json);
- if(room.match?.mode==='coach'&&!room.match.done&&room.match.deadline&&Date.now()>=room.match.deadline){applyCoachTimeout(room.match,Date.now(),room.difficulty);try{await save(db,row,room);}catch(e){if(attempt<4&&String(e.message).includes('État modifié'))return readRoom(db,roomCode,bearer,attempt+1);throw e;}row.revision++;}
+ if(room.match?.mode==='coach'&&!room.match.done&&room.match.deadline&&Date.now()>=room.match.deadline){if(room.match.story)storyTimeout(room);else applyCoachTimeout(room.match,Date.now(),room.difficulty);try{await save(db,row,room);}catch(e){if(attempt<4&&String(e.message).includes('État modifié'))return readRoom(db,roomCode,bearer,attempt+1);throw e;}row.revision++;}
  return {row,room,role};
 }
-async function save(db,row,room){const m=room.match;if(m?.presentation===2&&!m.personal&&m.lastReveal?.length&&m.presentedRound!==m.round){m.presentedRound=m.round;m.reaction={id:crypto.randomUUID(),ack:[false,m.mode==='coach']};if(m.mode==='coach')m.deadline=null;}if(room.match?.done&&!room.match.reaction)completeSocialResult(room,successDates(room));const now=Date.now();room.updated=now;const r=await db.prepare('UPDATE multiplayer_rooms SET state_json=?,revision=revision+1,updated_at=? WHERE code=? AND revision=?').bind(JSON.stringify(room),now,row.code,row.revision).run();if(!r.meta?.changes) throw Error('État modifié, recharge la partie');}
+async function save(db,row,room){const m=room.match;if(m?.presentation===2&&!m.personal&&!m.story&&m.lastReveal?.length&&m.presentedRound!==m.round){m.presentedRound=m.round;m.reaction={id:crypto.randomUUID(),ack:[false,m.mode==='coach']};if(m.mode==='coach')m.deadline=null;}if(room.match?.done&&!room.match.reaction)completeSocialResult(room,successDates(room));const now=Date.now();room.updated=now;const r=await db.prepare('UPDATE multiplayer_rooms SET state_json=?,revision=revision+1,updated_at=? WHERE code=? AND revision=?').bind(JSON.stringify(room),now,row.code,row.revision).run();if(!r.meta?.changes) throw Error('État modifié, recharge la partie');}
 async function actOnce(db,roomCode,bearer,action){
  const {row,room,role}=await readRoom(db,roomCode,bearer); const now=Date.now();
  if(action.type==='join'){
@@ -156,9 +161,22 @@ async function actOnce(db,roomCode,bearer,action){
   room.modeSuggestions??=[null,null];room.modeSuggestions[role]=action.mode;
   await save(db,row,room);return publicState(room,role);
  }
+ if(room.match?.story&&['ackInvitation','answer','nextScene','timeout'].includes(action.type)){
+  if(action.type==='timeout'){const m=room.match;if(m.mode==='coach'&&!m.done&&m.deadline&&now>=m.deadline)storyTimeout(room);else return publicState(room,role);}
+  else storyAction(room,role,action,now);
+  if(room.match.stage==='prepare-identification')initializeSeats(room.match);
+  await save(db,row,room);return publicState(room,role);
+ }
+ if(room.match?.story&&room.mode==='versus'&&['venue','confirmVenue'].includes(action.type)){
+  const m=room.match;if(m.stage!=='venue')throw Error('Invitation déjà envoyée');m.venueVotes??=[null,null];m.venueConfirmed??=[false,false];
+  if(action.type==='venue'){if(!VENUES.some(v=>v.id===action.venueId))throw Error('Lieu indisponible');m.venueVotes[role]=action.venueId;m.venueConfirmed[role]=false;}
+  else{if(!m.venueVotes[role])throw Error('Choisis un lieu');m.venueConfirmed[role]=true;if(m.venueConfirmed.every(Boolean)&&m.venueVotes[0]===m.venueVotes[1])invitationFor(room,m.venueVotes[0]);}
+  await save(db,row,room);return publicState(room,role);
+ }
  if(action.type==='chooseVenue'){
   const m=room.match;if(room.phase!=='playing'||m?.mode!=='coach'||m.stage!=='venue'||role!==0)throw Error('Seul le célibataire choisit le lieu');
   const venue=VENUES.find(v=>v.id===action.venueId);if(!venue)throw Error('Lieu indisponible');m.venue=venue;
+  if(m.story){invitationFor(room,venue.id);await save(db,row,room);return publicState(room,role);}
   const p=getProfile('coach',m.profileId);applyEffect(m.scores[0],p.venuePreference===venue.id?{connection:1}:{connection:-1},room.difficulty);initializeSeats(m);
   await save(db,row,room);return publicState(room,role);
  }
@@ -197,7 +215,7 @@ async function actOnce(db,roomCode,bearer,action){
   }else if(action.type==='confirmVenue'){
    if(m.stage!=='venue'||!setup.venueVotes[role])throw Error('Choisis un lieu avant de confirmer');if(setup.changeVotes?.some(Boolean))throw Error('Répondez à la demande de changement avant de confirmer');
    setup.venueConfirmed??=[false,false];setup.venueConfirmed[role]=true;
-   if(setup.venueConfirmed.every(Boolean)&&setup.venueVotes.every(v=>v===setup.venueVotes[0])){m.venue=VENUES.find(v=>v.id===setup.venueVotes[0]);initializeSeats(m);}
+   if(setup.venueConfirmed.every(Boolean)&&setup.venueVotes.every(v=>v===setup.venueVotes[0])){if(m.story)invitationFor(room,setup.venueVotes[0]);else{m.venue=VENUES.find(v=>v.id===setup.venueVotes[0]);initializeSeats(m);}}
   }else{
    if(m.stage!=='venue'||!VENUES.some(v=>v.id===action.venueId))throw Error('Lieu indisponible');
    setup.venueVotes[role]=action.venueId;setup.venueConfirmed??=[false,false];setup.venueConfirmed[role]=false;
@@ -219,7 +237,7 @@ async function actOnce(db,roomCode,bearer,action){
    if(m.mode==='doubleDate'){m.pair.profiles.forEach((_,i)=>{if(!m.identification[i])m.scores[i].respect-=2;});}
    else if(m.mode==='versus'){m.identification.forEach((ok,i)=>{if(!ok)m.scores[i].respect-=2;});}
    else if(!m.identification[0])m.scores[0].respect-=2;
-   m.seats=null;m.stage='conversation';if(m.mode==='coach')m.deadline=now+45000;
+   m.seats=null;m.stage='conversation';if(m.story)introStory(room);if(m.mode==='coach')m.deadline=now+45000;
   }
   await save(db,row,room);return publicState(room,role);
  }

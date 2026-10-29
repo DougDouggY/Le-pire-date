@@ -1,3 +1,4 @@
+import { installRomcomProfiles } from './romcom-profiles.mjs';
 import { ORGANIZED_DUOS, EXTRA_DUO_PROFILES } from './organized-duos.mjs';
 import { installExtraDuoRoutes } from './extra-duo-routes.mjs';
 import { installProfileDetails } from './profile-details.mjs';
@@ -138,6 +139,8 @@ ddProfiles.push(...EXTRA_DUO_PROFILES);
 installPersonalContent(ddProfiles);
 installExtraDuoRoutes(ddProfiles);
 installProfileDetails({doubleDate:{profiles:ddProfiles},versus:{profiles:vsProfiles},coach:{profiles:coachProfiles}});
+
+installRomcomProfiles({doubleDate:{profiles:ddProfiles},versus:{profiles:vsProfiles},coach:{profiles:coachProfiles}});
 
 export const CONTENT = { doubleDate: { profiles: ddProfiles, pairs: ddPairs, duos: ORGANIZED_DUOS }, versus: { profiles: vsProfiles }, coach: { profiles: coachProfiles } };
 

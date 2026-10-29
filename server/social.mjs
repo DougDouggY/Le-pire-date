@@ -1,7 +1,7 @@
 export const VENUES = [
  {id:'luxury',name:'Le Belvédère',tag:'Vue panoramique · un peu trop chic pour un premier date',image:'/solo/assets/venue-rooftop.webp'},
  {id:'kebab',name:'Le Kebab du Destin',tag:'Sauce blanche · grandes décisions',image:'/solo/assets/kebab-night.webp'},
- {id:'arcade',name:'La Salle Bonus',tag:'Néons · flippers · revanche',image:'/solo/assets/venue-retro-arcade.webp'},
+ {id:'arcade',name:'La Salle de Billard',tag:'Tapis vert · comptoir · revanche',image:'/solo/assets/mp/billiards-table.webp'},
 ];
 
 export function cleanName(value,fallback){
@@ -23,7 +23,7 @@ export function completeSocialResult(room,dates){
  const m=room.match;
  if(!m?.done||m.result||!room.participants?.every(Boolean))return;
  const outcomes=m.mode==='versus'?[0,1].map(role=>m.winner===role?'win':'loss'):
-  [0,1].map(()=>m.mode==='coach'?m.winner===0?'win':'loss':m.successful?'win':'loss');
+  [0,1].map(role=>m.mode==='coach'?m.winner===0?'win':'loss':m.story?m.individual?.[role]==='interested'?'win':'loss':m.successful?'win':'loss');
  m.result={id:m.id||crypto.randomUUID(),mode:m.mode,outcomes,dates};
  for(const [role,p] of room.participants.entries()){
   p.stats.games++;p.stats[outcomes[role]==='win'?'wins':'losses']++;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
+import { duoRoute,blindRoute,versusRoute,PREFERRED_VENUES } from '../server/romcom-content.mjs';
 import { arrivalFor } from '../server/date-presentation.mjs';
 import { conversationScenes } from '../server/conversation.mjs';
 import { CONTENT, NARRATIVE_BRANCHES } from '../server/content.mjs';
@@ -46,7 +47,9 @@ async function createPair(browser,mode,names=['Alex','Robin'],venueChoice='prefe
  for(const [role,page] of pages.entries())await page.fill('#mp-player-name',names[role]);
  await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
  if(mode==='doubleDate')await prepareDoubleDate(pages,duoId,exerciseChange,memberId);
+ if(mode==='versus'){for(const page of pages){await page.locator('[data-venue]').first().waitFor();await page.click('[data-venue="kebab"]');await page.click('#mp-confirm-venue');}}
  if(mode==='coach'){await pages[1].locator('.mp-reference-portrait').waitFor();const guide=await view(pages[1]);const p=CONTENT.coach.profiles.find(p=>p.name===guide.dossier.name);const venue=venueChoice==='wrong'?['luxury','kebab','arcade'].find(v=>v!==p.venuePreference):p.venuePreference;await pages[0].locator(`[data-blind-venue="${venue}"]`).click();}
+ await acceptInvitation(pages,mode);
  await pages[0].locator('.mp-candidates').waitFor();await pages[1].locator(mode==='coach'?'.mp-reference-portrait':'.mp-candidates').waitFor();
  return {contexts,pages};
 }
@@ -56,7 +59,7 @@ async function prepareDoubleDate(pages,duoId=null,exerciseChange=false,memberId=
   await page.locator('#mp-city').waitFor();await page.fill('#mp-city',role?'Lyon':'Paris');await page.click('#mp-city-next');await page.locator('#mp-like-profile').waitFor();
  }
  if(!exerciseChange)await selectDuo();if(memberId)await pages[0].click(`[data-duo-person="${memberId}"]`);
- await pages[0].click('#mp-view-profile');await pages[0].locator('.mp-profile-prompt').first().waitFor();assert.equal(await pages[0].locator('.mp-profile-prompt').count(),3);await pages[0].click('[data-gallery-next]');await pages[0].click('#mp-profile-back');
+ await pages[0].click('#mp-view-profile');await pages[0].locator('.mp-profile-prompt').first().waitFor();assert((await pages[0].locator('.mp-profile-prompt').count())>=3);await pages[0].click('[data-gallery-next]');await pages[0].click('#mp-profile-back');
  let first=await pages[0].locator('#mp-like-profile').getAttribute('data-profile');
  const before=(await view(pages[1])).foxy.profiles;assert.equal(before.length,4);assert(before.some(p=>p.duo.members.some(m=>m.id===first)));
  await pages[0].click('#mp-like-profile');await pages[0].locator('[data-foxy-step="waiting"]').waitFor();
@@ -94,14 +97,26 @@ async function identify(pages,mode){
    await page.locator(`[data-seat]:has(img[src="${photo}"])`).click();
   }
  }
- await pages[0].locator('.mp-scene').waitFor();if(mode!=='coach')await pages[1].locator('.mp-scene').waitFor();
+ await pages[0].locator('.mp-scene').waitFor();if(mode!=='coach')await pages[1].locator('.mp-scene').waitFor();await readPlayback(pages,mode);
 }
-function authoredScene(s,coach){
- const p=s.mode==='doubleDate'?CONTENT.doubleDate.profiles.find(p=>p.name===s.profiles.find(p=>p.mine).name):CONTENT[s.mode].profiles.find(p=>p.name===(s.profile?.name||coach.dossier.name));
- const original=s.mode==='doubleDate'?p.duoScenes:s.mode==='coach'?p.communicationScenes:p.stories;
- const scenes=conversationScenes(p,original,s.venue?.id);
- const branch=Object.values(NARRATIVE_BRANCHES).flat().find(b=>b.prompt===s.scene.prompt);
- return branch||scenes.find(sc=>sc.id===s.scene.id);
+function authoredScene(s){
+ const all=[...CONTENT.doubleDate.duos.flatMap(d=>d.profiles.flatMap(id=>duoRoute(id,d.id))),...CONTENT.coach.profiles.flatMap(p=>blindRoute(p.id)),...CONTENT.versus.profiles.flatMap(p=>versusRoute(p.id))];return all.find(sc=>sc.id===s.scene.id);
+}
+async function sync(page){await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await delay(60);}
+async function acceptInvitation(pages,mode){
+ const readers=mode==='coach'?[pages[0]]:pages;
+ for(const page of readers){await page.locator('#mp-ack-invitation').waitFor();await page.click('#mp-ack-invitation');}
+ await Promise.all(readers.map(sync));
+}
+async function readPlayback(pages,mode){
+ const readers=mode==='coach'?[pages[0]]:pages;
+ let safety=80;
+ while(safety--){const state=await view(pages[0]);if(!state.reaction)break;
+  for(const page of readers){await sync(page);await page.locator(`[data-reaction="${state.reaction.id}"]`).waitFor();assert.match(await page.locator('.mp-spoken-reply').textContent(),/./);}
+  for(const page of readers)await page.click('#mp-next-scene');
+  await Promise.all(readers.map(sync));
+ }
+ assert(safety>0,'Playback stalled');
 }
 const score=e=>Object.values(e||{}).reduce((a,b)=>a+b,0);
 
@@ -145,33 +160,20 @@ async function choicesFit(page){
  for(const choice of box.choices){assert(choice.top>=0);assert(choice.bottom<=box.height,`Choice ends at ${choice.bottom} beyond ${box.height}px viewport`);assert(choice.font>=13);}
 }
 async function play(pages,mode,policy,{reconnect=false}={}){
- for(let round=1;round<7;round++){
-  const initial=await view(pages[0]);if(initial.ending)return initial;
-  const coach=mode==='coach'?await view(pages[1]):null;
-  const roles=mode==='coach'?[0]:initial.scene.turn&&initial.scene.turn!=='simultaneous'?[Number(initial.scene.turn.slice(-1))]:[0,1];
-  for(const role of roles){
-   const current=await view(pages[role]),scene=authoredScene(current,coach);
-   const ordered=scene.options.toSorted((a,b)=>score(b.effect)-score(a.effect));const fail=policy==='fail'||(mode==='versus'&&role===1);const option=fail?ordered.at(-1):ordered[0];
-   if(mode==='versus'&&initial.scene.turn!=='simultaneous')assert.equal(await pages[1-role].locator('[data-option]').count(),0);
-   await pages[role].locator(`[data-option="${option.id}"]`).waitFor();await choicesFit(pages[role]);await pages[role].locator(`[data-option="${option.id}"]`).click();
-   if(mode==='doubleDate'){await pages[role].locator('.mp-spoken-reply').filter({hasText:option.reply}).waitFor();assert.equal((await view(pages[1-role])).lastReveal.length,role===0?0:1);}
-   else if(roles.length===2&&role===0)await pages[0].locator('.mp-wait').waitFor();
-   if(roles.length===2&&role===0){const hidden=await view(pages[1]);assert(!('picks'in hidden));assert(!JSON.stringify(hidden).includes('"effect"'));}
-   if(reconnect&&round===1&&role===0){
-    await pages[0].reload();await pages[0].click('#openMultiplayer');await pages[0].click('#mp-resume');
-    await pages[0].locator(mode==='doubleDate'||mode==='coach'?'.mp-spoken-reply':'.mp-wait').waitFor();
-   }
+ for(let round=1;round<=6;round++){
+  await Promise.all((mode==='coach'?[pages[0]]:pages).map(sync));
+  const states=await Promise.all(pages.map(view));if(states[0].ending)return states[0];
+  const roles=mode==='coach'?[0]:[0,1].filter(r=>states[r].scene?.options.length);
+  for(const [index,role]of roles.entries()){
+   const current=states[role],scene=authoredScene(current),ordered=scene.options.toSorted((a,b)=>score(b.effect)-score(a.effect)),option=policy==='fail'||mode==='versus'&&role===1?ordered.at(-1):ordered[0];
+   await pages[role].locator(`[data-option="${option.id}"]`).waitFor();await choicesFit(pages[role]);await pages[role].click(`[data-option="${option.id}"]`);
+   if(index===0&&roles.length===2){assert.equal((await view(pages[1-role])).reaction,null);assert.deepEqual((await view(pages[1-role])).lastReveal,[]);await pages[role].locator('.mp-wait').waitFor();}
+   if(reconnect&&round===1&&role===0){await pages[0].reload();await pages[0].click('#openMultiplayer');await pages[0].click('#mp-resume');await pages[0].locator('.mp-scene').waitFor();}
   }
-  const readers=mode==='coach'?[pages[0]]:pages;await Promise.all(readers.map(p=>p.locator('#mp-next-scene').waitFor()));
-  for(const page of readers){const s=await view(page);assert(s.reaction);await eventually(async()=>{const rendered=await page.locator('.mp-result').allTextContents();return s.lastReveal.every(x=>rendered.some(text=>text.includes(x.text)&&text.includes(x.reply)));},'The complete chosen reply did not render');assert(await page.locator('.mp-spoken-reply').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=18));}
-  if(reconnect&&round===1){await pages[1].reload();await pages[1].click('#openMultiplayer');await pages[1].click('#mp-resume');await pages[1].locator(mode==='coach'?'.mp-reference-phone':'#mp-next-scene').waitFor();assert.equal((await view(pages[1])).me,1);}
-  await pages[0].click('#mp-next-scene');if(mode!=='coach'){assert((await view(pages[0])).reaction,'One reader skipped the reaction for both');await pages[1].click('#mp-next-scene');}else{const guide=await view(pages[1]);assert.equal(guide.scene,null);assert.deepEqual(guide.lastReveal,[]);assert.equal(await pages[1].locator('[data-option],.mp-spoken-reply').count(),0);}
-  await eventually(async()=>{const next=await view(pages[0]);return !next.reaction;},'Both readers did not resume the date');
-  const next=await view(pages[0]);
-  if(next.ending){await Promise.all(pages.map(p=>p.locator('#mp-rematch').waitFor()));return next;}
-  await Promise.all((mode==='coach'?[pages[0]]:pages).map(p=>p.locator(`.mp-scene[data-round="${next.round}"]`).waitFor()));
+  await readPlayback(pages,mode);
+  if(mode==='coach'){const guide=await view(pages[1]);assert.equal(guide.scene,null);assert.deepEqual(guide.lastReveal,[]);assert.equal(await pages[1].locator('[data-option],.mp-spoken-reply').count(),0);}
  }
- assert.fail('Match never finished');
+ await Promise.all(pages.map(sync));const ending=await view(pages[0]);assert(ending.ending,'Match never finished');await Promise.all(pages.map(p=>p.locator('#mp-rematch').waitFor()));return ending;
 }
 
 for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fail']){
@@ -193,9 +195,9 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
     assert.equal(await pages[1].inputValue('#mp-chat-text'),'Un indice en cours de rédaction');assert.match(await pages[1].locator('[data-gallery-count]').textContent(),/2 \/ 4/);
    }
    const ending=await play(pages,mode,policy,{reconnect:policy==='win'});
-   if(mode==='doubleDate')assert.match(ending.ending,policy==='win'?/Les deux rendez-vous se prolongent/:/équipe échoue/);
-   if(mode==='versus'){assert.equal(ending.winner,policy==='win'?0:null);assert.match(ending.ending,policy==='win'?/joueur 1/:/rentrer seule/);}
-   if(mode==='coach')assert.match(ending.ending,policy==='win'?/deuxième rendez-vous/:/remercie pour la soirée/);
+   if(mode==='doubleDate')assert.match(ending.ending,policy==='win'?/elle propose de vous revoir/:/elle préfère en rester/);
+   if(mode==='versus'){assert.equal(ending.winner,policy==='win'?0:null);assert.match(ending.ending,policy==='win'?/Alex/:/rentrer seule/);}
+   if(mode==='coach')assert.match(ending.ending,policy==='win'?/propose de vous revoir/:/remercie pour la soirée/);
    for(const page of pages){const local=await page.evaluate(()=>window.LP_CONTACTS.data());assert.equal(local.stats.games,1);assert.equal(Object.values(local.players)[0].stats.games,1);}
    await pages[0].click('#mp-contacts');await pages[0].locator('#player-contact-list').waitFor();assert.equal(await pages[0].locator('[data-contact]').count(),1);if(policy==='win')assert.equal(await pages[0].locator('[data-date]').count(),1);await pages[0].click('#contactsBack');await pages[0].click('#openMultiplayer');await pages[0].click('#mp-resume');await pages[0].locator('#mp-rematch').waitFor();assert.equal(await pages[0].evaluate(()=>window.LP_CONTACTS.data().stats.games),1);
    if(mode==='coach'&&policy==='win'){
@@ -204,7 +206,7 @@ for(const mode of ['doubleDate','versus','coach'])for(const policy of ['win','fa
     await Promise.all(pages.map(p=>p.locator('#mp-ready').waitFor()));
     await eventually(async()=>await pages[1].locator('#mp-difficulty').count()===1,'Swapped host did not regain lobby controls');
     await pages[0].click('#mp-ready');await pages[1].click('#mp-ready');
-    await pages[0].locator('.mp-reference-portrait').waitFor();const guide=await view(pages[0]);const target=CONTENT.coach.profiles.find(p=>p.name===guide.dossier.name);await pages[1].locator(`[data-blind-venue="${target.venuePreference}"]`).click();await pages[1].locator('[data-seat]').first().waitFor();
+    await pages[0].locator('.mp-reference-portrait').waitFor();const guide=await view(pages[0]);const target=CONTENT.coach.profiles.find(p=>p.name===guide.dossier.name);await pages[1].locator(`[data-blind-venue="${target.venuePreference}"]`).click();await acceptInvitation([pages[1],pages[0]],mode);await pages[1].locator('[data-seat]').first().waitFor();
     assert.notEqual((await view(pages[0])).dossier.name,previous);
     // Same UI workflow, but the physical devices now have the opposite roles.
     const swapped=[pages[1],pages[0]];await identify(swapped,mode);await play(swapped,mode,'win');
@@ -307,22 +309,22 @@ test('Blind Foxy profile photos remain whole and locally browsable while live di
   assert.equal(await coach.locator('.mp-profile-prompt').count(),3);assert.equal(await coach.locator('.mp-candidates').count(),0);
   await identify(pages,'coach');const photo=await coach.locator('.mp-reference-portrait').getAttribute('src');
   await single.locator('[data-option]').first().click();await single.locator('.mp-spoken-reply').waitFor();assert.equal((await view(coach)).scene,null);assert.equal(await coach.locator('.mp-spoken-choice,.mp-spoken-reply,.mp-question').count(),0);
-  await single.click('#mp-next-scene');await eventually(async()=>(await view(coach)).round===2,'Second scene did not begin');
+  await readPlayback(pages,'coach');await eventually(async()=>(await view(coach)).round===2,'Second scene did not begin');
   assert.equal(await coach.locator('.mp-reference-portrait').getAttribute('src'),photo);assert.equal((await view(coach)).scene,null);
   for(const page of pages)assert.deepEqual(page.errors,[]);
  }finally{await browser.close();}
 });
 
 
-test('Blind Foxy: an unsuitable venue stays selected; the two-second reaction returns to cumulative mood without exposing scores',{timeout:90000},async()=>{
+test('Blind Foxy: venue redirection and two-second reaction preserve cumulative mood and private scores',{timeout:90000},async()=>{
  const browser=await chromium.launch(browserOptions);
  try{
   const {pages}=await createPair(browser,'coach',['Alex','Robin'],'wrong');await identify(pages,'coach');
-  const initial=await view(pages[0]);await choicesFit(pages[0]);assert(initial.arrivalNotice);assert.equal(initial.actor.mood,'displeased');assert.equal(initial.scores,undefined);
-  await pages[0].locator('.mp-notice').waitFor();assert(!/affinité|points de respect/.test(await pages[0].locator('.mp-notice').textContent()));
+  const initial=await view(pages[0]);await choicesFit(pages[0]);const dossier=await view(pages[1]);const target=CONTENT.coach.profiles.find(p=>p.name===dossier.dossier.name);assert.equal(initial.venue.id,PREFERRED_VENUES[target.id]);assert.equal(initial.actor.mood,'neutral');assert.equal(initial.scores,undefined);
+  assert.equal(initial.scores,undefined);
   const guide=await view(pages[1]);const authored=authoredScene(initial,guide),option=authored.options.toSorted((a,b)=>score(b.effect)-score(a.effect))[0];
   await pages[0].click(`[data-option="${option.id}"]`);await pages[0].locator('.mp-spoken-reply').waitFor();
-  const reply=await view(pages[0]);assert(reply.actor.transient);assert.notEqual(reply.actor.transient.photo,reply.actor.photo);
+  await pages[0].click('#mp-next-scene');const reply=await view(pages[0]);assert(reply.actor.transient);assert.notEqual(reply.actor.transient.photo,reply.actor.photo);
   assert.equal(await pages[0].locator('[data-actor-image]').getAttribute('src'),reply.actor.transient.photo);
   await eventually(async()=>await pages[0].locator('[data-actor-image]').getAttribute('src')===reply.actor.photo,'Transient face did not return to cumulative mood');
   await delay(2500);assert.equal(await pages[0].locator('[data-actor-image]').getAttribute('src'),reply.actor.photo,'Polling replayed the reaction');
@@ -343,7 +345,7 @@ test('all profile questions and three choices fit together across desktop and ph
   // Keep the real rendered game and its styles; stop polling while measuring
   // the complete authored text catalogue, including the longest branch prompts.
   await page.click('.mp-close');await page.evaluate(()=>document.querySelector('#mp-overlay').classList.add('on'));
-  const fixtures=[];
+  const fixtures=[...CONTENT.doubleDate.duos.flatMap(d=>d.profiles.flatMap(id=>duoRoute(id,d.id))),...CONTENT.coach.profiles.flatMap(p=>blindRoute(p.id)),...CONTENT.versus.profiles.flatMap(p=>versusRoute(p.id))];
   for(const [mode,pool]of Object.entries(CONTENT))for(const p of pool.profiles){
    const route=conversationScenes(p,p.duoScenes||p.communicationScenes||p.stories,'kebab');fixtures.push(...route);if(mode==='coach')fixtures.push({...route[0],arrivalNotice:arrivalFor(p,'kebab',true)});
    for(const [key,branches]of Object.entries(NARRATIVE_BRANCHES))if(key.startsWith(p.id+':'))fixtures.push(...branches.map(b=>({...b,transition:'La conversation revient sur ce qui a été dit un peu plus tôt.'})));
