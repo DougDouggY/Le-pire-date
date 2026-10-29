@@ -16,3 +16,11 @@ test('sixteen identities each have four profile photos, three expressions and th
  }
  assert.equal(profiles,16);assert.equal(all.size,160);
 });
+
+test('retouched images replace legacy seat URLs and are byte-identical at their compatibility paths',async()=>{
+ const {IMAGE_REVISIONS,revisedImage}=await import('./image-revisions.mjs');
+ assert.equal(Object.keys(IMAGE_REVISIONS).length,13);
+ for(const [old,current]of Object.entries(IMAGE_REVISIONS)){assert.notEqual(old,current);assert.equal(revisedImage(old),current);assert.deepEqual(readFileSync('public'+old),readFileSync('public'+current));}
+ const solene=CONTENT.doubleDate.profiles.find(p=>p.id==='dd-solene');assert.equal(solene.face.accessory,'none');assert(!/broche|masque/i.test(solene.face.cue));
+ for(const pool of Object.values(CONTENT))for(const p of pool.profiles)assert(!/blue.pin|theat.*mask|masque/i.test(p.face.accessory));
+});

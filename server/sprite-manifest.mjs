@@ -10,12 +10,12 @@ export const SPRITES = {
     "angry": "/solo/assets/mp/people/c87010a910956fe35e.webp"
   },
   "dd-solene": {
-    "neutral": "/solo/assets/mp/people/04b7b021609cb53013.webp",
-    "happy": "/solo/assets/mp/people/1a55553ea351b40d41.webp",
-    "delighted": "/solo/assets/mp/people/6d58a67091cc27e5d3.webp",
-    "displeased": "/solo/assets/mp/people/289e18d28e2cfa8985.webp",
-    "disappointed": "/solo/assets/mp/people/fc15c83486b2969859.webp",
-    "angry": "/solo/assets/mp/people/3d1c13d1ad9de9e720.webp"
+    "neutral": "/solo/assets/mp/people/794fc7e133be4065e2.webp",
+    "happy": "/solo/assets/mp/people/6bb9f8a4aca1f8d2dd.webp",
+    "delighted": "/solo/assets/mp/people/efd8a09fe82d54a2e9.webp",
+    "displeased": "/solo/assets/mp/people/2e59c1acb096931bd9.webp",
+    "disappointed": "/solo/assets/mp/people/1d5f8385ad945c1270.webp",
+    "angry": "/solo/assets/mp/people/2c283eddc9ba19e653.webp"
   },
   "dd-naima": {
     "neutral": "/solo/assets/mp/people/cdd4950b89315092fb.webp",

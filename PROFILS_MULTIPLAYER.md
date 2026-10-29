@@ -108,3 +108,17 @@ mutuel conserve les villes, remet à zéro matchs et validations, et incrémente
 la révision de sélection. Les clients envoient cette révision pour rejeter les
 likes devenus obsolètes après une remise à zéro. Les nouvelles parties portent
 `paired: true` ; les salons antérieurs continuent sans forcer un nouveau choix.
+
+
+## Direction visuelle — vêtements sans masques de théâtre
+
+Aucun personnage, dans aucun mode (solo compris), ne doit porter de petit masque
+de théâtre sur ses vêtements, y compris sous forme de logo ou de broche. Ne pas utiliser un tel
+symbole comme indice de reconnaissance. Solène se reconnaît notamment à sa frange
+droite et à son carré châtain ; ses photos, images d’identification et six sprites
+ont été retouchés pour supprimer cette ancienne broche. Les autres galeries et
+sprites, ainsi que les profils et planches d’expression solo, ont été inspectés.
+
+Les URL retouchées sont renouvelées pour éviter les anciennes images en cache.
+Les anciens fichiers contiennent aussi la retouche, et `image-revisions.mjs`
+redirige les références d’images conservées dans les salons existants.

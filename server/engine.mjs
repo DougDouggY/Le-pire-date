@@ -1,3 +1,4 @@
+import { revisedImage } from './image-revisions.mjs';
 import { conversationScenes } from './conversation.mjs';
 import { arrivalFor, moodFor, SPRITES } from './date-presentation.mjs';
 import { SHARED_MOMENTS } from './personal-content.mjs';
@@ -10,7 +11,7 @@ const pick=(xs)=>xs[Math.floor(Math.random()*xs.length)];
 const token=()=>crypto.randomUUID()+crypto.randomUUID();
 const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,'0')).join('');
 const code=()=>Array.from(crypto.getRandomValues(new Uint8Array(8)),n=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n&31]).join('');
-function facePath(profile){ const pool=CONTENT[profile.mode]?.profiles||[]; const i=pool.findIndex(x=>x.id===profile.id); return `/solo/assets/mp/${profile.mode}-${i+1}.webp`; }
+function facePath(profile){ if(profile.media?.photos?.[0])return profile.media.photos[0];const pool=CONTENT[profile.mode]?.profiles||[]; const i=pool.findIndex(x=>x.id===profile.id); return `/solo/assets/mp/${profile.mode}-${i+1}.webp`; }
 function buildMatch(mode, excluded=null){
  const content=CONTENT[mode];
  if(mode==='doubleDate'){
@@ -95,7 +96,7 @@ export function publicState(room, role){
  const identification={
   identifying:!!m.seats,
   identified:!!m.identified?.[role],
-  seats:(mode==='coach'&&role===1?null:mode==='doubleDate'?m.seats?.[role]:m.seats)?.map(({key,image,cue})=>room.difficulty==='facile'?{key,image,cue}:{key,image})||null,
+  seats:(mode==='coach'&&role===1?null:mode==='doubleDate'?m.seats?.[role]:m.seats)?.map(({key,image,cue})=>room.difficulty==='facile'?{key,image:revisedImage(image),cue:cue?.replace('frange droite et broche bleue','frange droite et carré châtain')}:{key,image:revisedImage(image)})||null,
  };
  if(mode==='doubleDate'){
   if(m.personal){const scene=sceneFor(m,role),p=getProfile(mode,m.pair.profiles[role]),reply=m.ownReplies?.[role];return {...base,...identification,sharedMoment:m.paired&&CONTENT.doubleDate.duos.find(d=>d.id===m.setup?.pairId)?.moments?.[m.round]|| (m.conversation&&m.round===0?'La table s’installe. Chacun prend le temps de choisir sa boisson.':SHARED_MOMENTS[Math.min(m.round-(m.conversation?1:0),4)]),profiles:[{...publicProfile(p,room.difficulty==='facile'),photo:facePath(p),mine:true}],round:Math.min(m.round+1,scenesFor(m,role).length),total:scenesFor(m,role).length,scene:scene?{id:scene.id,prompt:scene.prompt,transition:scene.transition||null,options:scene.options.map(o=>({id:o.id,text:o.text}))}:null,selected:!!m.picks[role],reaction:reply?{id:scene.id,ready:!!m.nextReady[role],both:!!m.picks[1-role]}:null,lastReveal:reply?[reply]:[],ending:m.done?m.ending:null,personal:true};}

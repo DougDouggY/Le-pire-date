@@ -21,15 +21,15 @@ export const MEDIA = {
   },
   "dd-solene": {
     "photos": [
-      "/solo/assets/mp/doubleDate-2.webp",
-      "/solo/assets/mp/people/9f487001d4c7742800.webp",
-      "/solo/assets/mp/people/3950b4590685a651b4.webp",
-      "/solo/assets/mp/people/e0caefeb2c6c12ee37.webp"
+      "/solo/assets/mp/people/aeaee7bf1279562a92.webp",
+      "/solo/assets/mp/people/63e186741cddf64948.webp",
+      "/solo/assets/mp/people/3e709134a57c7e59d5.webp",
+      "/solo/assets/mp/people/4fd3a9a652121579f2.webp"
     ],
     "actor": {
-      "neutral": "/solo/assets/mp/people/f6f88a19b50532a7a2.webp",
-      "warm": "/solo/assets/mp/people/7d33c2ee0db7412ea6.webp",
-      "awkward": "/solo/assets/mp/people/f4775a7f94bd64f821.webp"
+      "neutral": "/solo/assets/mp/people/86446fb35de886632f.webp",
+      "warm": "/solo/assets/mp/people/ff903afcfc4bc99c1a.webp",
+      "awkward": "/solo/assets/mp/people/9a13fed2c50e82fcd7.webp"
     },
     "lookalikes": [
       "/solo/assets/mp/people/e8d94742afc482cb30.webp",

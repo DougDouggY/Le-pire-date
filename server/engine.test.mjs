@@ -419,3 +419,11 @@ test('Blind Foxy venue choice stays with the single player, keeps the dossier pr
  const c=await readRoom(db,host.code,guest.token),coach=publicState(c.room,c.role);assert.equal(coach.actor,undefined);assert.equal(coach.arrivalNotice,undefined);assert.equal(coach.scene,null);
  await assert.rejects(()=>act(db,host.code,host.token,{type:'chooseVenue',venueId:'luxury'}),/célibataire/);
 });
+
+
+test('a persisted room upgrades Solène identification photos and outdated accessory hints without resetting the game',async()=>{
+ const {db,host,guest}=await modernDuo(['dd-livia','dd-solene'],false);const row=db.rows.get(host.code);let room=JSON.parse(row.state_json);
+ const seat=room.match.seats[1].find(s=>s.target),key=seat.key;seat.image='/solo/assets/mp/people/f6f88a19b50532a7a2.webp';seat.cue='frange droite et broche bleue';room.difficulty='facile';row.state_json=JSON.stringify(room);
+ const current=publicState(room,1).seats.find(s=>s.key===key);assert.equal(current.image,getProfile('doubleDate','dd-solene').media.actor.neutral);assert(!/broche|masque/i.test(current.cue));
+ await act(db,host.code,guest.token,{type:'identify',key});room=(await readRoom(db,host.code,host.token)).room;assert.equal(room.match.identification[1],true);
+});
